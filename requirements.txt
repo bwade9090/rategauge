@@ -1,0 +1,2 @@
+# Runtime dependencies (pinned). Populated as implementation lands — see README roadmap.
+# Development/tooling pins live in requirements-dev.txt.

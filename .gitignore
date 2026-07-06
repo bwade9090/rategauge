@@ -1,0 +1,33 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Secrets & local config
+.env
+.env.*
+
+# Local data & run artifacts (fetched on demand, never committed)
+data/
+logs/
+*.sqlite
+*.db
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

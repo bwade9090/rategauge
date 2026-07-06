@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rategauge"
+version = "0.0.1"
+description = "Evaluation-first LLM extraction of monetary policy decisions, auto-graded against official central-bank statistics (BIS CBPOL) via SDMX."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Hyungbae Cho", email = "bwade9090@gmail.com" }]
+keywords = ["llm", "evaluation", "central-banking", "monetary-policy", "sdmx", "structured-extraction"]
+
+[project.urls]
+Repository = "https://github.com/bwade9090/rategauge"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
