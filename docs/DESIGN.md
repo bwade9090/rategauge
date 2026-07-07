@@ -33,7 +33,7 @@ Build a compact, production-shaped LLM application that demonstrates a full eval
 │ SDMX → daily     │──▶│ calls (sync + batch)   │──▶│ vs golden events         │
 │ levels → change  │   │ prompts/ (versioned)   │   │ metrics.py: accuracy,    │
 │ events (golden)  │   │ runs → JSONL artifacts │   │ hallucination, refusal,  │
-└──────────────────┘   └────────────────────────┘   │ bootstrap CIs, McNemar   │
+└──────────────────┘   └────────────────────────┘   │ Wilson CIs, McNemar      │
                                                     └────────────┬─────────────┘
                                                                  ▼
                                             ┌────────────────────────────────┐
@@ -157,7 +157,9 @@ Verified pricing (2026-07): gpt-5.4-mini $0.75/$4.50 per MTok, gpt-5.4-nano $0.2
 - Per-field accuracy: `action`, `change_bps` (exact), rate levels (exact at 2 dp after midpoint/regime mapping), `effective_date` (exact; window-matched fallback reported separately).
 - **Hallucination rate**: share of items where the model asserts a value contradicted by the golden set (wrong direction, wrong magnitude, fabricated change on a hold), and share of trap documents where it invents a policy decision.
 - **Refusal/abstention quality**: correct `no_policy_decision` on traps; incorrect abstention on real decisions.
-- **Statistical layer** (the differentiating rigor): bootstrap 95 % CIs on every headline rate; McNemar tests for model-vs-model differences on paired items; results reported per bank and per era (URL-pattern eras double as text-style eras).
+- **Statistical layer** (the differentiating rigor): Wilson score 95 % CIs on every headline rate (percentile-bootstrap intervals were rejected — they collapse to zero width whenever the observed rate is exactly 0 or 1, publishing false certainty); McNemar exact tests for model-vs-model differences on paired items; results reported per bank and per era (URL-pattern eras double as text-style eras).
+- **Event-document assignment**: each golden event belongs to exactly one document — the one with the latest announcement date at or before the effective date. Without this rule, an intermeeting cut (e.g. the post-9/11 2001-09-17 ECB emergency cut, effective 09-18) also falls inside the preceding scheduled hold's window and would invert that document's grade.
+- **Known ungradeable documents** (flagged, never silently graded): the 2024-09-12 ECB decision (its effective date coincides with the CBPOL MRO→DFR series redefinition) and the corridor-only decisions 2015-12-03 / 2019-09-12 (DFR moved, the MRO that CBPOL then tracked did not). Grading those against the ECB FM deposit-facility series is a roadmap item. The 2008-12-16 Fed point-target→range transition grades on action and level but not change_bps (the golden −88 bp is a midpoint-convention artifact no document can state).
 
 **Baseline & regression gate:** each accepted run commits a scorecard JSON under `eval/baselines/`. CI recomputes metrics from committed artifacts (offline, no keys) and fails if any headline metric degrades beyond a tolerance vs baseline. Framework note: grading is deterministic joining, so the core harness is plain pytest + pandas; packaging the trap-set eval as an `inspect-ai` task is a stretch item for ecosystem compatibility, not an MVP dependency.
 

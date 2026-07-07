@@ -34,7 +34,7 @@ Early development (project scaffold). Roadmap:
 - [x] Schema-constrained extraction pipeline (OpenAI Responses API + Anthropic Messages API structured outputs; versioned prompts; JSONL artifacts + cost ledger)
 - [ ] Evaluation suite + CI regression gate (network-free tests via mocked models)
 - [ ] Hallucination / refusal metrics on control and trap documents
-- [ ] Model × prompt league table with bootstrap confidence intervals
+- [ ] Model × prompt league table with Wilson 95% confidence intervals
 - [ ] FastAPI service + SQLite request tracing
 - [ ] Docker image & scheduled incremental ingestion
 

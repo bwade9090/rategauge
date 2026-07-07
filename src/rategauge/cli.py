@@ -29,6 +29,10 @@ def main(argv: list[str] | None = None) -> None:
     group.add_argument("--docs", help="comma-separated doc_ids")
     group.add_argument("--dev-set", action="store_true", help="run the 12-doc dev subset")
 
+    grade = subparsers.add_parser("grade", help="grade artifacts against the golden set")
+    grade.add_argument("--models", required=True, help="comma-separated model keys")
+    grade.add_argument("--prompt", default="v001", help="prompt version")
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -40,6 +44,8 @@ def main(argv: list[str] | None = None) -> None:
         run_smoke()
     elif args.command == "extract":
         run_extract(args.model, args.prompt, args.docs, args.dev_set)
+    elif args.command == "grade":
+        run_grade(args.models.split(","), args.prompt)
 
 
 def run_golden(out_dir: Path) -> None:
@@ -119,6 +125,44 @@ def run_extract(model_key: str, prompt_version: str, docs: str | None, dev_set: 
     ok = sum(1 for row in rows if row["ok"])
     cost = sum(row["cost_usd"] for row in rows)
     print(f"{len(rows)} documents, {ok} valid records, {len(rows) - ok} failures, ${cost:.4f}")
+
+
+def run_grade(model_keys: list[str], prompt_version: str) -> None:
+    import json
+
+    from rategauge.evalsuite import grader, metrics
+    from rategauge.schema import SCHEMA_VERSION
+
+    golden = grader.GoldenSeries.load_all()
+    scorecards_dir = Path("eval/scorecards")
+    graded_dir = Path("eval/graded")
+    summaries, graded_by_model = [], {}
+    for model_key in (key.strip() for key in model_keys if key.strip()):
+        stem = f"{model_key}__{prompt_version}__{SCHEMA_VERSION}"
+        artifact_rows = grader.load_artifact(Path("eval/runs") / f"{stem}.jsonl")
+        graded = grader.grade_rows(artifact_rows, golden)
+        graded_by_model[model_key] = graded
+        summary = metrics.summarize(graded, artifact_rows)
+        summaries.append(summary)
+
+        graded_dir.mkdir(parents=True, exist_ok=True)
+        with (graded_dir / f"{stem}.jsonl").open("w", encoding="utf-8") as handle:
+            for row in graded:
+                handle.write(json.dumps(row) + "\n")
+        scorecards_dir.mkdir(parents=True, exist_ok=True)
+        (scorecards_dir / f"{stem}.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8"
+        )
+
+    print(metrics.league_table(summaries))
+    if len(graded_by_model) > 1:
+        print("\nPairwise McNemar (action correctness):")
+        for test in metrics.pairwise_mcnemar(graded_by_model):
+            print(
+                f"  {test['model_a']} vs {test['model_b']}: "
+                f"only-a={test['only_a_correct']} only-b={test['only_b_correct']} "
+                f"p={test['p_value']} (n={test['n_paired']})"
+            )
 
 
 if __name__ == "__main__":

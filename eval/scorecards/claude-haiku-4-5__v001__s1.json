@@ -1,0 +1,61 @@
+{
+  "model_key": "claude-haiku-4-5",
+  "prompt_version": "v001",
+  "documents": 12,
+  "graded": 11,
+  "extraction_failed": 0,
+  "ungradeable": 1,
+  "events": 7,
+  "holds": 4,
+  "action_accuracy": {
+    "rate": 1.0,
+    "n": 11,
+    "ci95": [
+      0.7412,
+      1.0
+    ]
+  },
+  "hallucination_rate": {
+    "rate": 0.0909,
+    "n": 11,
+    "ci95": [
+      0.0162,
+      0.3774
+    ]
+  },
+  "fabricated_decision_rate": {
+    "rate": 0.0,
+    "n": 4,
+    "ci95": [
+      0.0,
+      0.4899
+    ]
+  },
+  "change_bps": {
+    "n": 6,
+    "correct": 0.8333,
+    "wrong": 0.1667,
+    "abstained": 0.0
+  },
+  "level": {
+    "n": 11,
+    "correct": 1.0,
+    "wrong": 0.0,
+    "abstained": 0.0
+  },
+  "effective_date": {
+    "n": 7,
+    "correct": 0.2857,
+    "wrong": 0.0,
+    "abstained": 0.7143
+  },
+  "decision_date": {
+    "n": 11,
+    "correct": 1.0,
+    "wrong": 0.0,
+    "abstained": 0.0
+  },
+  "cost_usd": 0.0323,
+  "input_tokens": 23498,
+  "output_tokens": 1770
+}
