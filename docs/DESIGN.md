@@ -176,7 +176,7 @@ Every LLM call writes to SQLite (`traces` table): timestamp, doc id, model, prom
 
 - **All tests network-free.** Committed fixtures: small real excerpts of CBPOL/ECB CSV responses and document HTML (US-gov public domain; BIS/ECB permit quotation with attribution), plus recorded LLM responses as JSON. LLM clients are faked at the transport layer.
 - Unit tests: golden-set derivation (event counts, regime mapping, NaN/missing-day handling), document parsers per era, schema validation, grader matching rules, metrics math.
-- GitHub Actions: `ruff check` + `pytest` on push/PR (Python 3.11–3.13 matrix); the eval regression gate runs on the committed artifacts.
+- GitHub Actions: `ruff check` + `pytest` on push/PR (Python 3.12–3.13 matrix, matching the pinned dependency set); the eval regression gate runs on the committed artifacts.
 
 ## 9. Repository layout
 

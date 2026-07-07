@@ -21,8 +21,10 @@ htmlcov/
 .env.*
 !.env.example
 
-# Local data & run artifacts (fetched on demand, never committed)
-data/
+# Local data & run artifacts (fetched on demand, never committed) —
+# except data/golden/, the derived, license-cleared golden set.
+data/*
+!data/golden/
 logs/
 *.sqlite
 *.db
