@@ -30,7 +30,7 @@ RateGauge is a compact, production-shaped reference implementation of that idea:
 Early development (project scaffold). Roadmap:
 
 - [ ] Corpus ingestion: FOMC statements + ECB press releases (fetched on demand, nothing re-hosted)
-- [ ] CBPOL-derived golden set via the BIS SDMX API, with documented matching rules
+- [x] CBPOL-derived golden set via the BIS SDMX API, with documented derivation & exclusion rules ([data card](data/golden/README.md))
 - [ ] Schema-constrained extraction pipeline
 - [ ] Evaluation suite + CI regression gate (network-free tests via mocked models)
 - [ ] Hallucination / refusal metrics on control and trap documents
