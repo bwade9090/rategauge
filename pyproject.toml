@@ -12,9 +12,14 @@ license = { text = "MIT" }
 authors = [{ name = "Hyungbae Cho", email = "bwade9090@gmail.com" }]
 keywords = ["llm", "evaluation", "central-banking", "monetary-policy", "sdmx", "structured-extraction"]
 dependencies = [
+    "anthropic>=0.90",
     "beautifulsoup4>=4.12",
     "httpx>=0.27",
+    "openai>=2.0",
     "pandas>=2.2",
+    "pydantic>=2.8",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
     "truststore>=0.9",
 ]
 
@@ -26,6 +31,9 @@ rategauge = "rategauge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+rategauge = ["extract/prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -99,7 +99,8 @@ class TestExtract:
         assert "raise the three key ECB interest rates" in text
         assert "with effect from 17 June 2026" in text
         assert "Key ECB interest rates" in text  # section heading kept as context
-        assert "11 June 2026" not in text  # publication date stripped
+        assert text.startswith("Published: 11 June 2026")  # announcement date grounded
+        assert text.count("11 June 2026") == 1  # ...and not duplicated in the body
         assert "***" not in text
         assert "European Central Bank" not in text  # address box
         assert "Related topics" not in text
@@ -110,7 +111,7 @@ class TestExtract:
         assert "took the following monetary policy decisions" in text
         assert "remain unchanged at 3.0%, 4.0% and 2.0%" in text  # from div.orderedlist
         assert "The President of the ECB will comment" in text  # second div.section
-        assert "2 December 1999" not in text
+        assert text.startswith("Published: 2 December 1999")  # sibling pub-date div
         assert "PRESS RELEASE" not in text
 
     def test_page_without_main_raises(self):

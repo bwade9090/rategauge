@@ -1,4 +1,4 @@
-"""Command-line entry points: ``rategauge golden`` and ``rategauge ingest``."""
+"""Command-line entry points: golden | ingest | smoke | extract."""
 
 import argparse
 import logging
@@ -20,6 +20,15 @@ def main(argv: list[str] | None = None) -> None:
     ingest.add_argument("--catalog", type=Path, default=Path("data/catalog/documents.csv"))
     ingest.add_argument("--bank", choices=["FED", "ECB", "all"], default="all")
 
+    subparsers.add_parser("smoke", help="verify API keys with one tiny call per provider")
+
+    extract = subparsers.add_parser("extract", help="run schema-constrained extraction")
+    extract.add_argument("--model", required=True, help="model key from configs/models.yaml")
+    extract.add_argument("--prompt", default="v001", help="prompt version (extract/prompts/)")
+    group = extract.add_mutually_exclusive_group(required=True)
+    group.add_argument("--docs", help="comma-separated doc_ids")
+    group.add_argument("--dev-set", action="store_true", help="run the 12-doc dev subset")
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -27,6 +36,10 @@ def main(argv: list[str] | None = None) -> None:
         run_golden(args.out)
     elif args.command == "ingest":
         run_ingest(args.cache, args.catalog, args.bank)
+    elif args.command == "smoke":
+        run_smoke()
+    elif args.command == "extract":
+        run_extract(args.model, args.prompt, args.docs, args.dev_set)
 
 
 def run_golden(out_dir: Path) -> None:
@@ -58,6 +71,54 @@ def run_ingest(cache_dir: Path, catalog_path: Path, bank: str) -> None:
         print(f"  MISSING: {doc_id}")
     if missing:
         raise SystemExit(1)  # let automation distinguish partial from complete ingests
+
+
+SMOKE_DOCUMENT = (
+    "Source: Federal Reserve (FOMC) press release\n\n<document>\nThe Committee decided to "
+    "maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent.\n</document>"
+)
+
+
+def run_smoke() -> None:
+    """One tiny schema-constrained call per provider to verify keys and plumbing."""
+    from rategauge.config import load_credentials, load_models
+    from rategauge.extract.clients import CLIENT_BUILDERS, EXTRACTORS
+    from rategauge.extract.runner import load_prompt
+    from rategauge.schema import RateDecision
+
+    load_credentials()
+    prompt = load_prompt("v001")
+    models = load_models()
+    by_provider = {model.provider: model for model in models.values()}  # cheapest last wins
+    for provider in sorted(by_provider):
+        model = min(
+            (m for m in models.values() if m.provider == provider),
+            key=lambda m: m.input_usd_per_mtok,
+        )
+        raw = EXTRACTORS[provider](
+            CLIENT_BUILDERS[provider](), model.model_id, prompt, SMOKE_DOCUMENT
+        )
+        record = RateDecision.model_validate_json(raw.payload)
+        cost = model.cost_usd(raw.input_tokens, raw.output_tokens)
+        print(
+            f"{provider:<10} {model.model_id:<28} OK  action={record.action} "
+            f"range={record.target_range_lower_pct}-{record.target_range_upper_pct} "
+            f"tokens={raw.input_tokens}+{raw.output_tokens} cost=${cost:.5f} "
+            f"latency={raw.latency_ms}ms"
+        )
+
+
+def run_extract(model_key: str, prompt_version: str, docs: str | None, dev_set: bool) -> None:
+    from rategauge.extract.runner import DEV_SET, run_extraction
+
+    if dev_set:
+        doc_ids = DEV_SET
+    else:
+        doc_ids = tuple(part.strip() for part in docs.split(",") if part.strip())
+    rows = run_extraction(model_key, prompt_version, doc_ids)
+    ok = sum(1 for row in rows if row["ok"])
+    cost = sum(row["cost_usd"] for row in rows)
+    print(f"{len(rows)} documents, {ok} valid records, {len(rows) - ok} failures, ${cost:.4f}")
 
 
 if __name__ == "__main__":

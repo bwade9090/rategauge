@@ -154,6 +154,13 @@ def _extract_modern(article) -> str:
     if body is None:
         raise ValueError("no statement body div found in #article")
     paragraphs: list[str] = []
+    # The release date lives in the sibling heading div; keep it so extraction
+    # models can ground decision_date instead of guessing.
+    time_node = article.find("p", class_="article__time")
+    if time_node is not None:
+        stamp = normalize_text(time_node.get_text(" ", strip=True))
+        if stamp:
+            paragraphs.append(f"Published: {stamp}")
     for paragraph in body.find_all("p"):
         # Cloudflare-obfuscated media-inquiries paragraph yields garbage text.
         if paragraph.find("span", class_="__cf_email__") is not None:
@@ -178,6 +185,9 @@ def _extract_boarddocs(html: str, soup: BeautifulSoup) -> str:
     if len(markers) >= 2:
         fragment = BeautifulSoup(html[markers[0].end() : markers[1].start()], "html.parser")
         paragraphs = []
+        release_line = soup.find(string=re.compile(r"Release Date:"))
+        if release_line:
+            paragraphs.append(normalize_text(str(release_line)))
         for paragraph in fragment.find_all("p"):
             # Legacy pages leave <p> unclosed, so html.parser NESTS each
             # paragraph inside the previous one — get_text() on each would

@@ -111,6 +111,7 @@ class TestEnumerate:
 class TestExtractModern:
     def test_body_only_with_junk_stripped(self):
         text = fed.extract_text(MODERN_PAGE)
+        assert text.startswith("Published: June 18, 2025")  # release date grounded
         assert "economic activity has continued to expand" in text
         assert "4-1/4 to 4 1/2 percent" in text  # NBSP normalized
         assert "media inquiries" not in text  # Cloudflare email paragraph
@@ -121,11 +122,11 @@ class TestExtractModern:
 class TestExtractBoarddocs:
     def test_slices_between_marker_comments(self):
         text = fed.extract_text(BOARDDOCS_PAGE)
+        assert text.startswith("Release Date: November 6, 2002")  # date grounded
         assert "lower its target for the federal funds rate by 50 basis points" in text
         assert "reduction in the discount rate" in text
         assert "Last update" not in text
         assert "2002 Monetary policy" not in text
-        assert "Release Date" not in text
 
     def test_unclosed_p_tags_do_not_duplicate_text(self):
         # Legacy pages leave <p> unclosed; html.parser nests them, and naive
@@ -156,7 +157,7 @@ class TestLive:
         assert 210 <= len(refs) <= 240
         by_id = {ref.doc_id: ref for ref in refs}
         assert "fed_20080122b" in by_id  # emergency cut, 'b' suffix
-        assert "fed_20200315b" in by_id  # 2020 emergency cut
+        assert "fed_20200315a" in by_id  # 2020 emergency cut (index links the 'a' variant)
         assert "fed_20260617a" in by_id  # latest as of 2026-07
 
         from rategauge.http import default_client

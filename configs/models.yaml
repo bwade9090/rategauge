@@ -1,0 +1,20 @@
+# Model registry for the extraction league table.
+# Pricing per 1M tokens, verified against official provider pricing pages on
+# 2026-07-06 (docs/DESIGN.md section 5). Batch APIs give 50% off both sides.
+batch_discount: 0.5
+models:
+  gpt-5.4-nano:
+    provider: openai
+    model_id: gpt-5.4-nano
+    input_usd_per_mtok: 0.20
+    output_usd_per_mtok: 1.25
+  gpt-5.4-mini:
+    provider: openai
+    model_id: gpt-5.4-mini
+    input_usd_per_mtok: 0.75
+    output_usd_per_mtok: 4.50
+  claude-haiku-4-5:
+    provider: anthropic
+    model_id: claude-haiku-4-5-20251001
+    input_usd_per_mtok: 1.00
+    output_usd_per_mtok: 5.00

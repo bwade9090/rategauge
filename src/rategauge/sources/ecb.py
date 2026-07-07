@@ -124,13 +124,16 @@ def extract_text(html: str) -> str:
     """Extract the release body text from a decision page.
 
     Takes only ``div.section`` / ``div.orderedlist`` blocks inside ``<main>``
-    (all eras), dropping the publication-date paragraph and the ``***``
-    separator; headings are kept as context.
+    (all eras) and drops the ``***`` separator; headings are kept as context.
+    The publication date — the only place these pages state the announcement
+    date — is preserved as a leading "Published: ..." line so extraction
+    models can ground decision_date instead of guessing.
     """
     soup = BeautifulSoup(html, "html.parser")
     main = soup.find("main")
     if main is None:
         raise ValueError("no <main> element found in ECB page")
+    published = _publication_date(main)
     blocks = [
         block
         for block in main.find_all("div", recursive=False)
@@ -143,9 +146,11 @@ def extract_text(html: str) -> str:
             if BODY_BLOCK_CLASSES & set(block.get("class") or [])
         ]
     paragraphs: list[str] = []
+    if published:
+        paragraphs.append(f"Published: {published}")
     for block in blocks:
         for junk in block.find_all("p", class_="ecb-publicationDate"):
-            junk.decompose()
+            junk.decompose()  # already captured as the "Published:" line
         for element in block.find_all(["p", "li", "h2"]):
             text = normalize_text(element.get_text(" ", strip=True))
             if not text or text == "***":
@@ -154,3 +159,15 @@ def extract_text(html: str) -> str:
     if not paragraphs:
         raise ValueError("no body text extracted from ECB page")
     return "\n\n".join(paragraphs)
+
+
+def _publication_date(main) -> str | None:
+    """Announcement date: p.ecb-publicationDate (modern) or the
+    ecb-pressContentPubDate sibling div (retro-converted pre-2015 pages)."""
+    for tag, class_name in (("p", "ecb-publicationDate"), ("div", "ecb-pressContentPubDate")):
+        node = main.find(tag, class_=class_name)
+        if node is not None:
+            text = normalize_text(node.get_text(" ", strip=True))
+            if text:
+                return text
+    return None

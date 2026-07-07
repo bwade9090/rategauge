@@ -31,7 +31,7 @@ Early development (project scaffold). Roadmap:
 
 - [x] Corpus ingestion: 224 FOMC statements (2000–2026) + 302 ECB decision releases (1999–2026), fetched on demand from official indexes, nothing re-hosted ([catalog](data/catalog/documents.csv))
 - [x] CBPOL-derived golden set via the BIS SDMX API, with documented derivation & exclusion rules ([data card](data/golden/README.md))
-- [ ] Schema-constrained extraction pipeline
+- [x] Schema-constrained extraction pipeline (OpenAI Responses API + Anthropic Messages API structured outputs; versioned prompts; JSONL artifacts + cost ledger)
 - [ ] Evaluation suite + CI regression gate (network-free tests via mocked models)
 - [ ] Hallucination / refusal metrics on control and trap documents
 - [ ] Model × prompt league table with bootstrap confidence intervals
