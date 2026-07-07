@@ -26,7 +26,6 @@ reason — documented exclusion over silent dropping.
 import argparse
 import io
 import logging
-import ssl
 import time
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -34,7 +33,8 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
-import truststore
+
+from rategauge.http import default_client
 
 logger = logging.getLogger(__name__)
 
@@ -67,17 +67,6 @@ XM_REDEFINITION_DATES = frozenset({date(2024, 9, 18)})
 # instrument; a shift there can still be a genuine decision (2008-10-15 is:
 # the coordinated -50 bp cut). Kept, but flagged for cross-source audit.
 XM_AUDIT_DATES = frozenset({date(2000, 6, 28), date(2008, 10, 15)})
-
-
-def default_client(timeout: float = 60.0) -> httpx.Client:
-    """HTTP client that verifies TLS against the OS trust store.
-
-    Corporate networks commonly intercept TLS with a locally trusted root CA;
-    certifi-only verification fails there while browsers work. ``truststore``
-    keeps verification on and delegates trust to the operating system.
-    """
-    context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    return httpx.Client(timeout=timeout, follow_redirects=True, verify=context)
 
 
 @dataclass(frozen=True)

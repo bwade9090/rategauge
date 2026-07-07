@@ -191,7 +191,7 @@ src/rategauge/
   serve/               # api.py, tracing.py
   cli.py               # rategauge ingest|golden|extract|eval|serve
 configs/               # banks.yaml, models.yaml
-data/                  # gitignored cache; data/golden/ committed (derived, licensed)
+data/                  # gitignored cache; data/golden/ + data/catalog/ committed (derived facts, licensed)
 eval/baselines/        # committed scorecards
 tests/                 # incl. fixtures/
 docs/                  # DESIGN.md, eval-methodology.md (written with results)

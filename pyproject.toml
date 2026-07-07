@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Hyungbae Cho", email = "bwade9090@gmail.com" }]
 keywords = ["llm", "evaluation", "central-banking", "monetary-policy", "sdmx", "structured-extraction"]
 dependencies = [
+    "beautifulsoup4>=4.12",
     "httpx>=0.27",
     "pandas>=2.2",
     "truststore>=0.9",
@@ -19,6 +20,9 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/bwade9090/rategauge"
+
+[project.scripts]
+rategauge = "rategauge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -33,3 +37,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Verbatim DOM fixtures must replicate real pages, long lines included.
+"tests/test_sources_*.py" = ["E501"]

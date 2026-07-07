@@ -25,6 +25,7 @@ htmlcov/
 # except data/golden/, the derived, license-cleared golden set.
 data/*
 !data/golden/
+!data/catalog/
 logs/
 *.sqlite
 *.db
