@@ -8,7 +8,17 @@ RateGauge turns unstructured central-bank policy statements (FOMC, ECB) into str
 
 ## Why
 
-Central banks and financial institutions increasingly use LLMs to extract structured data from unstructured documents (see, e.g., the BIS Innovation Hub's Project Gaia). The hard part is not extraction — it is knowing when the model is wrong. RateGauge is a compact, production-shaped reference implementation of one answer:
+Central banks and financial institutions increasingly use LLMs to extract structured data from unstructured documents (see, e.g., the BIS Innovation Hub's Project Gaia, which extracts climate indicators from corporate reports). The hard part is not extraction — it is knowing when the model is wrong. And in most real deployments there is no ground truth to check against: that is precisely why LLM extraction is used in the first place, and why its reliability is so hard to certify.
+
+RateGauge inverts that trap deliberately: it runs a full production-shaped extraction pipeline on a task where a perfect audit trail exists — monetary-policy decisions, recorded authoritatively in the BIS's official CBPOL statistics — so that every hallucination is countable, at zero labelling cost.
+
+### Why grade a task an official API already answers?
+
+Because the deliverable is not the data — it is the **measured trustworthiness of the method**. Nobody needs an LLM to learn the current federal funds target range. The value of re-deriving it from prose is that the derivation can be scored *exactly*, the same way a nowcasting model is backtested on periods where the outcome is already known before anyone trusts it in real time. Policy statements are structurally identical to the documents that matter in production — official financial communications, with numbers, dates, and hedged language embedded in careful prose whose conventions shift across eras — but uniquely among such documents, they come with a complete statistical answer key.
+
+What the evaluation produces is a transferable **failure map**: how often models misread a "hold" as a cut, invent decisions from documents that contain none, confuse announcement dates with effective dates, or stumble over era-specific wording ("minimum bid rate", target ranges vs single rates) — quantified with confidence intervals, per model and per prompt version, and enforced as a regression gate in CI. Those are exactly the failure modes that matter when the same technique is pointed at documents with **no** answer key: vote splits and dissents, forward guidance, loan covenants, climate disclosures.
+
+RateGauge is a compact, production-shaped reference implementation of that idea:
 
 1. **Extract** — LLM + Pydantic schema-constrained outputs turn policy statements into decision records (rate level, change in basis points, direction, effective date).
 2. **Grade** — extractions are joined against the official BIS CBPOL policy-rate series (SDMX) to produce per-field accuracy, hallucination, and refusal rates.

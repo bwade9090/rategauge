@@ -12,6 +12,8 @@ Build a compact, production-shaped LLM application that demonstrates a full eval
 4. **Gate** quality in CI: any prompt or model change re-runs the evaluation against a committed baseline.
 5. **Serve** extractions, decision records, and evaluation scorecards from a FastAPI service with per-request token/cost/latency tracing.
 
+**Why this task, when the extracted numbers are already published as structured data?** That redundancy is the experimental design, not an oversight. LLM document extraction is typically deployed exactly where no ground truth exists (the reason Project Gaia needed human-in-the-loop verification of extracted climate KPIs). A methodology for *measuring* extraction reliability can therefore only be validated on a task where truth is knowable — and policy decisions are the rare document-extraction task with a complete, authoritative, machine-readable answer key. The product is the measurement harness and the failure map it produces (hold-vs-change confusion, fabricated decisions on trap documents, announcement/effective date slips, era-specific wording), which transfer to extraction targets that have no API: votes, guidance, covenants, disclosures. See README "Why" for the applicant-facing version of this argument.
+
 **Non-goals (MVP):** vote splits and dissenter names, forward-guidance classification, balance-sheet actions, banks beyond Fed/ECB, LLM-as-judge scoring, UI. These are roadmap items, not MVP.
 
 ## 2. System overview
