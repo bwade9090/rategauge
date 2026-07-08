@@ -47,3 +47,34 @@ def test_catalog_round_trip(tmp_path):
     path = Path(tmp_path) / "documents.csv"
     common.write_catalog([FED_REF, ECB_REF], path)
     assert common.read_catalog(path) == [ECB_REF, FED_REF]  # sorted by bank, then date
+
+
+def test_batch_collect_continues_past_broken_batch(monkeypatch, capsys):
+    from rategauge.extract import batch
+
+    paths = [Path("eval/batches/batch_bad.json"), Path("eval/batches/msgbatch_good.json")]
+    monkeypatch.setattr(batch, "list_states", lambda: list(paths))
+    monkeypatch.setattr(
+        batch,
+        "load_state",
+        lambda path: {
+            "collected": False,
+            "batch_id": path.stem,
+            "model_key": "gpt-5.4-nano",
+            "missing_doc_ids": [],
+        },
+    )
+
+    def fake_collect(path):
+        if "bad" in path.stem:
+            raise RuntimeError("boom")
+        return [{"doc_id": "a", "ok": True, "cost_usd": 0.1}]
+
+    monkeypatch.setattr(batch, "collect_batch", fake_collect)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.run_batch_collect(None)
+    assert excinfo.value.code == 1  # the failure is loud...
+    out = capsys.readouterr().out
+    assert "ERROR batch_bad: boom" in out
+    assert "msgbatch_good" in out  # ...but the other batch was still collected

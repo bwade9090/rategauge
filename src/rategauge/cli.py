@@ -1,4 +1,4 @@
-"""Command-line entry points: golden | ingest | smoke | extract."""
+"""Command-line entry points: golden | ingest | smoke | extract | batch | grade."""
 
 import argparse
 import logging
@@ -29,6 +29,24 @@ def main(argv: list[str] | None = None) -> None:
     group.add_argument("--docs", help="comma-separated doc_ids")
     group.add_argument("--dev-set", action="store_true", help="run the 12-doc dev subset")
 
+    batch = subparsers.add_parser("batch", help="batch extraction at 50%% token cost")
+    batch_sub = batch.add_subparsers(dest="batch_command", required=True)
+    submit = batch_sub.add_parser("submit", help="submit one model x prompt batch")
+    submit.add_argument("--model", required=True, help="model key from configs/models.yaml")
+    submit.add_argument("--prompt", default="v001", help="prompt version (extract/prompts/)")
+    submit_group = submit.add_mutually_exclusive_group(required=True)
+    submit_group.add_argument("--docs", help="comma-separated doc_ids")
+    submit_group.add_argument("--dev-set", action="store_true", help="run the 12-doc dev subset")
+    submit_group.add_argument("--all", action="store_true", help="every document in the catalog")
+    submit.add_argument(
+        "--force",
+        action="store_true",
+        help="submit even if an uncollected batch for the same model+prompt exists",
+    )
+    batch_sub.add_parser("status", help="refresh and print batch statuses")
+    collect = batch_sub.add_parser("collect", help="collect finished batches into artifacts")
+    collect.add_argument("--batch-id", help="one specific batch id (default: all pending)")
+
     grade = subparsers.add_parser("grade", help="grade artifacts against the golden set")
     grade.add_argument("--models", required=True, help="comma-separated model keys")
     grade.add_argument("--prompt", default="v001", help="prompt version")
@@ -44,6 +62,15 @@ def main(argv: list[str] | None = None) -> None:
         run_smoke()
     elif args.command == "extract":
         run_extract(args.model, args.prompt, args.docs, args.dev_set)
+    elif args.command == "batch":
+        if args.batch_command == "submit":
+            run_batch_submit(
+                args.model, args.prompt, args.docs, args.dev_set, args.all, args.force
+            )
+        elif args.batch_command == "status":
+            run_batch_status()
+        elif args.batch_command == "collect":
+            run_batch_collect(args.batch_id)
     elif args.command == "grade":
         run_grade(args.models.split(","), args.prompt)
 
@@ -125,6 +152,97 @@ def run_extract(model_key: str, prompt_version: str, docs: str | None, dev_set: 
     ok = sum(1 for row in rows if row["ok"])
     cost = sum(row["cost_usd"] for row in rows)
     print(f"{len(rows)} documents, {ok} valid records, {len(rows) - ok} failures, ${cost:.4f}")
+
+
+# Rough per-document output size for pre-submit cost estimates (dev-set average
+# was ~200; padded up so the printed estimate errs on the expensive side).
+EST_OUTPUT_TOKENS_PER_DOC = 300
+
+
+def run_batch_submit(
+    model_key: str,
+    prompt_version: str,
+    docs: str | None,
+    dev_set: bool,
+    all_docs: bool,
+    force: bool,
+) -> None:
+    from rategauge import corpus
+    from rategauge.config import load_models
+    from rategauge.extract.batch import submit_batch
+    from rategauge.extract.runner import DEV_SET
+
+    if dev_set:
+        doc_ids = DEV_SET
+    elif all_docs:
+        doc_ids = tuple(ref.doc_id for ref in common.read_catalog(corpus.CATALOG_PATH))
+    else:
+        doc_ids = tuple(part.strip() for part in docs.split(",") if part.strip())
+    state = submit_batch(model_key, prompt_version, doc_ids, force=force)
+    model = load_models()[model_key]
+    estimated_cost = model.cost_usd(
+        state["estimated_input_tokens"], EST_OUTPUT_TOKENS_PER_DOC * len(doc_ids), batch=True
+    )
+    print(
+        f"submitted {state['batch_id']} ({model_key}, {len(doc_ids)} documents); "
+        f"~{state['estimated_input_tokens']:,} input tokens, "
+        f"rough batch cost ~${estimated_cost:.2f}"
+    )
+
+
+def run_batch_status() -> None:
+    from rategauge.extract import batch
+
+    paths = batch.list_states()
+    if not paths:
+        print("no batches submitted")
+        return
+    for path in paths:
+        state = batch.refresh_status(path)
+        status = "collected" if state["collected"] else state["status"]
+        print(
+            f"{state['batch_id']:<42} {state['model_key']:<18} {state['prompt_version']:<6} "
+            f"{len(state['documents']):>4} docs  {status}"
+        )
+
+
+def run_batch_collect(batch_id: str | None) -> None:
+    from rategauge.extract import batch
+
+    paths = batch.list_states()
+    if batch_id:
+        paths = [path for path in paths if path.stem == batch_id]
+        if not paths:
+            raise SystemExit(f"no state file for batch {batch_id}")
+    pending, errors = 0, 0
+    for path in paths:
+        state = batch.load_state(path)
+        if state["collected"]:
+            if batch_id:
+                print(f"{state['batch_id']} already collected")
+            continue
+        try:
+            rows = batch.collect_batch(path)
+        except batch.BatchNotReady as not_ready:
+            print(f"not ready: {not_ready}")
+            pending += 1
+            continue
+        except Exception as error:  # one broken batch must not block the rest
+            print(f"ERROR {path.stem}: {error}")
+            errors += 1
+            continue
+        ok = sum(1 for row in rows if row["ok"])
+        state = batch.load_state(path)
+        missing = len(state["missing_doc_ids"])
+        cost = sum(row["cost_usd"] for row in rows)
+        print(
+            f"{state['batch_id']} ({state['model_key']}): {len(rows)} results, {ok} valid, "
+            f"{len(rows) - ok} failures, {missing} missing, ${cost:.4f}"
+        )
+    if pending:
+        print(f"{pending} batch(es) still processing - rerun `rategauge batch collect` later")
+    if errors:
+        raise SystemExit(1)
 
 
 def run_grade(model_keys: list[str], prompt_version: str) -> None:

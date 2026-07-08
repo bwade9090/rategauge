@@ -52,6 +52,38 @@ def load_prompt(version: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def new_row(
+    doc_id: str, bank: str, announcement_date: str, model_key: str, prompt_version: str
+) -> dict:
+    """A blank artifact row; extraction outcome fields are filled in afterwards."""
+    return {
+        "doc_id": doc_id,
+        "bank": bank,
+        "announcement_date": announcement_date,
+        "model_key": model_key,
+        "prompt_version": prompt_version,
+        "schema_version": SCHEMA_VERSION,
+        "ok": False,
+        "record": None,
+        "error": None,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cost_usd": 0.0,
+        "latency_ms": 0,
+    }
+
+
+def apply_payload(row: dict, payload: str) -> None:
+    """Validate a model payload into the row: ok+record, or a schema_violation error."""
+    try:
+        record = RateDecision.model_validate(json.loads(payload))
+        row["ok"] = True
+        row["record"] = json.loads(record.model_dump_json())
+    except (json.JSONDecodeError, ValidationError) as error:
+        row["error"] = f"schema_violation: {error}"
+        logger.warning("schema violation for %s: %s", row["doc_id"], error)
+
+
 def run_extraction(
     model_key: str,
     prompt_version: str,
@@ -81,28 +113,20 @@ def run_extraction(
         _run_documents(documents, extract, client, model, model_key, prompt, prompt_version, rows)
     finally:
         if rows:
-            _write_artifact(rows, model_key, prompt_version, out_dir)
-            _append_ledger(rows, model, prompt_version, ledger_path)
+            write_artifact(rows, model_key, prompt_version, out_dir)
+            append_ledger(rows, model, prompt_version, ledger_path)
     return rows
 
 
 def _run_documents(documents, extract, client, model, model_key, prompt, prompt_version, rows):
     for document in documents:
-        row = {
-            "doc_id": document.ref.doc_id,
-            "bank": document.ref.bank,
-            "announcement_date": document.ref.announcement_date.isoformat(),
-            "model_key": model_key,
-            "prompt_version": prompt_version,
-            "schema_version": SCHEMA_VERSION,
-            "ok": False,
-            "record": None,
-            "error": None,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0.0,
-            "latency_ms": 0,
-        }
+        row = new_row(
+            document.ref.doc_id,
+            document.ref.bank,
+            document.ref.announcement_date.isoformat(),
+            model_key,
+            prompt_version,
+        )
         try:
             raw = extract(client, model.model_id, prompt, document.as_model_input())
         except (openai.OpenAIError, anthropic.AnthropicError, EmptyResponseError) as error:
@@ -114,13 +138,7 @@ def _run_documents(documents, extract, client, model, model_key, prompt, prompt_
         row["output_tokens"] = raw.output_tokens
         row["cost_usd"] = round(model.cost_usd(raw.input_tokens, raw.output_tokens), 6)
         row["latency_ms"] = raw.latency_ms
-        try:
-            record = RateDecision.model_validate(json.loads(raw.payload))
-            row["ok"] = True
-            row["record"] = json.loads(record.model_dump_json())
-        except (json.JSONDecodeError, ValidationError) as error:
-            row["error"] = f"schema_violation: {error}"
-            logger.warning("schema violation for %s: %s", document.ref.doc_id, error)
+        apply_payload(row, raw.payload)
         rows.append(row)
         logger.info(
             "%s: ok=%s action=%s ($%.4f, %dms)",
@@ -132,7 +150,7 @@ def _run_documents(documents, extract, client, model, model_key, prompt, prompt_
         )
 
 
-def _write_artifact(rows: list[dict], model_key: str, prompt_version: str, out_dir: Path) -> None:
+def write_artifact(rows: list[dict], model_key: str, prompt_version: str, out_dir: Path) -> None:
     """Merge rows into the run's artifact by doc_id — never truncate prior results."""
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{model_key}__{prompt_version}__{SCHEMA_VERSION}.jsonl"
@@ -143,15 +161,24 @@ def _write_artifact(rows: list[dict], model_key: str, prompt_version: str, out_d
             merged[existing["doc_id"]] = existing
     for row in rows:
         merged[row["doc_id"]] = row
-    with path.open("w", encoding="utf-8") as handle:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
         for row in merged.values():
             handle.write(json.dumps(row) + "\n")
+    tmp.replace(path)  # atomic swap: a crash mid-write can't truncate paid-for rows
     logger.info("wrote %s (%d rows, %d updated)", path, len(merged), len(rows))
 
 
-def _append_ledger(
-    rows: list[dict], model: ModelConfig, prompt_version: str, ledger_path: Path
+def append_ledger(
+    rows: list[dict],
+    model: ModelConfig,
+    prompt_version: str,
+    ledger_path: Path,
+    *,
+    run_id: str = "",
 ) -> None:
+    """Append one spend row. ``run_id`` (the provider batch id for batch runs)
+    lets collect retries detect an already-recorded batch and stay idempotent."""
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     is_new = not ledger_path.exists()
     with ledger_path.open("a", newline="", encoding="utf-8") as handle:
@@ -159,7 +186,7 @@ def _append_ledger(
         if is_new:
             writer.writerow(
                 ["timestamp_utc", "model_key", "prompt_version", "documents",
-                 "input_tokens", "output_tokens", "cost_usd"]
+                 "input_tokens", "output_tokens", "cost_usd", "run_id"]
             )
         writer.writerow(
             [
@@ -170,5 +197,6 @@ def _append_ledger(
                 sum(row["input_tokens"] for row in rows),
                 sum(row["output_tokens"] for row in rows),
                 round(sum(row["cost_usd"] for row in rows), 6),
+                run_id,
             ]
         )

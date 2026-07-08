@@ -1,0 +1,28 @@
+{
+  "batch_id": "batch_6a4d9a508fc48190bd6e43e90f965936",
+  "provider": "openai",
+  "model_key": "gpt-5.4-nano",
+  "prompt_version": "v001",
+  "schema_version": "s1",
+  "submitted_at_utc": "2026-07-08T00:31:13+00:00",
+  "status": "completed",
+  "collected": true,
+  "estimated_input_tokens": 1459,
+  "documents": [
+    {
+      "doc_id": "fed_20260617a",
+      "bank": "FED",
+      "announcement_date": "2026-06-17"
+    },
+    {
+      "doc_id": "ecb_pr121206",
+      "bank": "ECB",
+      "announcement_date": "2012-12-06"
+    }
+  ],
+  "openai_input_file_id": "file-RvSw2dSEGeCCRwVz5ULb2M",
+  "openai_output_file_id": "file-5TTcaugm6csmd4NUm2T2zh",
+  "openai_error_file_id": null,
+  "collected_at_utc": "2026-07-08T00:39:19+00:00",
+  "missing_doc_ids": []
+}
