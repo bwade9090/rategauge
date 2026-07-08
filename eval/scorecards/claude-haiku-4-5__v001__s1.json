@@ -1,61 +1,61 @@
 {
   "model_key": "claude-haiku-4-5",
   "prompt_version": "v001",
-  "documents": 12,
-  "graded": 11,
+  "documents": 526,
+  "graded": 523,
   "extraction_failed": 0,
-  "ungradeable": 1,
-  "events": 7,
-  "holds": 4,
+  "ungradeable": 3,
+  "events": 133,
+  "holds": 390,
   "action_accuracy": {
-    "rate": 1.0,
-    "n": 11,
+    "rate": 0.9637,
+    "n": 523,
     "ci95": [
-      0.7412,
-      1.0
+      0.944,
+      0.9766
     ]
   },
   "hallucination_rate": {
-    "rate": 0.0909,
-    "n": 11,
+    "rate": 0.0057,
+    "n": 523,
     "ci95": [
-      0.0162,
-      0.3774
+      0.002,
+      0.0167
     ]
   },
   "fabricated_decision_rate": {
-    "rate": 0.0,
-    "n": 4,
+    "rate": 0.0051,
+    "n": 390,
     "ci95": [
-      0.0,
-      0.4899
+      0.0014,
+      0.0185
     ]
   },
   "change_bps": {
-    "n": 6,
-    "correct": 0.8333,
-    "wrong": 0.1667,
-    "abstained": 0.0
+    "n": 132,
+    "correct": 0.9318,
+    "wrong": 0.0076,
+    "abstained": 0.0606
   },
   "level": {
-    "n": 11,
-    "correct": 1.0,
+    "n": 523,
+    "correct": 0.9656,
     "wrong": 0.0,
-    "abstained": 0.0
+    "abstained": 0.0344
   },
   "effective_date": {
-    "n": 7,
-    "correct": 0.2857,
+    "n": 133,
+    "correct": 0.4436,
     "wrong": 0.0,
-    "abstained": 0.7143
+    "abstained": 0.5564
   },
   "decision_date": {
-    "n": 11,
-    "correct": 1.0,
-    "wrong": 0.0,
-    "abstained": 0.0
+    "n": 523,
+    "correct": 0.956,
+    "wrong": 0.0019,
+    "abstained": 0.0421
   },
-  "cost_usd": 0.0323,
-  "input_tokens": 23498,
-  "output_tokens": 1770
+  "cost_usd": 0.6924,
+  "input_tokens": 976777,
+  "output_tokens": 81590
 }

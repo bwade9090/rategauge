@@ -1,0 +1,61 @@
+{
+  "model_key": "gpt-5.4-mini",
+  "prompt_version": "v001",
+  "documents": 526,
+  "graded": 467,
+  "extraction_failed": 56,
+  "ungradeable": 3,
+  "events": 130,
+  "holds": 337,
+  "action_accuracy": {
+    "rate": 0.8822,
+    "n": 467,
+    "ci95": [
+      0.8498,
+      0.9084
+    ]
+  },
+  "hallucination_rate": {
+    "rate": 0.0921,
+    "n": 467,
+    "ci95": [
+      0.0691,
+      0.1217
+    ]
+  },
+  "fabricated_decision_rate": {
+    "rate": 0.0059,
+    "n": 337,
+    "ci95": [
+      0.0016,
+      0.0214
+    ]
+  },
+  "change_bps": {
+    "n": 129,
+    "correct": 0.7907,
+    "wrong": 0.1473,
+    "abstained": 0.062
+  },
+  "level": {
+    "n": 467,
+    "correct": 0.9572,
+    "wrong": 0.0,
+    "abstained": 0.0428
+  },
+  "effective_date": {
+    "n": 130,
+    "correct": 0.4154,
+    "wrong": 0.0538,
+    "abstained": 0.5308
+  },
+  "decision_date": {
+    "n": 467,
+    "correct": 0.9422,
+    "wrong": 0.0021,
+    "abstained": 0.0557
+  },
+  "cost_usd": 0.3564,
+  "input_tokens": 594961,
+  "output_tokens": 59252
+}

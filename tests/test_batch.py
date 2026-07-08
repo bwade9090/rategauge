@@ -329,6 +329,36 @@ class TestCollect:
         assert rows[0]["ok"] is True
         assert batch.load_state(path)["missing_doc_ids"] == ["b"]
 
+    def test_openai_incomplete_response_classified_as_api_error(self, tmp_path):
+        # A content-filtered response carries a truncated output_text stump;
+        # it must be classified as a provider failure, not a schema violation.
+        line = json.dumps(
+            {
+                "custom_id": "a",
+                "response": {
+                    "status_code": 200,
+                    "body": {
+                        "status": "incomplete",
+                        "incomplete_details": {"reason": "content_filter"},
+                        "output": [
+                            {
+                                "type": "message",
+                                "content": [{"type": "output_text", "text": '{"bank": "FED'}],
+                            }
+                        ],
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                },
+                "error": None,
+            }
+        )
+        client = FakeOpenAI(status="completed", output_lines=[line])
+        path = self.submit(tmp_path, client, "gpt-5.4-nano", ("a",))
+        [row] = self.collect(tmp_path, path, client)
+        assert row["ok"] is False
+        assert row["error"] == "api_error: response incomplete (content_filter)"
+        assert row["cost_usd"] == 0.0  # filtered responses are not billed
+
     def test_openai_http_error_detail_read_from_response_body(self, tmp_path):
         # For HTTP failures the top-level error is null; the reason lives in
         # response.body.error and must survive into the artifact row.

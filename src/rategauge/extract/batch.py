@@ -301,11 +301,22 @@ def _collect_openai(client, state: dict, model: ModelConfig, docs: dict) -> list
                 row["cost_usd"] = round(
                     model.cost_usd(row["input_tokens"], row["output_tokens"], batch=True), 6
                 )
-                payload = _openai_output_text(body)
-                if payload is None:
-                    row["error"] = "api_error: no output_text in batch response"
+                status = body.get("status", "completed")
+                if status != "completed":
+                    # e.g. "incomplete" with reason content_filter (the provider's
+                    # anti-regurgitation filter killing a long evidence_quote) or
+                    # max_output_tokens. A provider-side failure, not a malformed
+                    # model payload — classify it as such, don't parse the stump.
+                    reason = (body.get("incomplete_details") or {}).get("reason")
+                    row["error"] = f"api_error: response {status}" + (
+                        f" ({reason})" if reason else ""
+                    )
                 else:
-                    apply_payload(row, payload)
+                    payload = _openai_output_text(body)
+                    if payload is None:
+                        row["error"] = "api_error: no output_text in batch response"
+                    else:
+                        apply_payload(row, payload)
             rows[row["doc_id"]] = row
     # Requests that failed (or never executed) land in a separate error file.
     if error_file_id:
