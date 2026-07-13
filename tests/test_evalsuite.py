@@ -68,7 +68,8 @@ def make_row(doc_id, bank, announced, record, ok=True):
 
 
 def grade_one(row):
-    [graded] = grader.grade_rows([row], GOLDEN, ANNOUNCEMENTS)
+    # doc_types={} = hermetic: no catalog reads, synthetic ids are controls.
+    [graded] = grader.grade_rows([row], GOLDEN, ANNOUNCEMENTS, doc_types={})
     return graded
 
 
@@ -130,7 +131,7 @@ class TestGradeChangeDocs:
         record = make_record(action="cut", change_bps=-75,
                              target_range_lower_pct=0.0, target_range_upper_pct=0.25)
         [graded] = grader.grade_rows(
-            [make_row("d1", "FED", "2008-12-16", record)], series, ANNOUNCEMENTS
+            [make_row("d1", "FED", "2008-12-16", record)], series, ANNOUNCEMENTS, doc_types={}
         )
         assert graded["action_correct"] is True
         assert graded["change_bps"] is None  # excluded from bps stats
@@ -157,6 +158,7 @@ class TestGradeChangeDocs:
             ],
             golden,
             announcements,
+            doc_types={},
         )
         assert hold_graded["expected_kind"] == "hold"  # event owned by the 09-17 doc
         assert hold_graded["action_correct"] is True
@@ -185,6 +187,65 @@ class TestGradeHoldDocs:
         record = make_record(bank="ECB", action="hold", dfr_pct=3.50)
         graded = grade_one(make_row("d1", "ECB", "2025-02-06", record))
         assert graded["level"] == "correct"  # DFR regime; level crossed the redefinition
+
+
+class TestGradeTrapDocs:
+    def test_trap_abstention_graded_correct(self):
+        record = make_record(action="no_policy_decision")
+        [graded] = grader.grade_rows(
+            [make_row("t1", "FED", "2024-10-15", record)],
+            GOLDEN,
+            ANNOUNCEMENTS,
+            doc_types={"t1": "minutes"},
+        )
+        assert graded["expected_kind"] == "trap"
+        assert graded["action_correct"] is True
+        assert graded["fabricated_decision"] is False
+        assert graded["level"] is None  # no golden join on trap documents
+
+    @pytest.mark.parametrize("action", ["hike", "cut", "hold"])
+    def test_any_asserted_decision_on_trap_is_fabricated(self, action):
+        record = make_record(bank="ECB", action=action)
+        [graded] = grader.grade_rows(
+            [make_row("t1", "ECB", "2025-02-06", record)],
+            GOLDEN,
+            ANNOUNCEMENTS,
+            doc_types={"t1": "non_decision"},
+        )
+        assert graded["expected_kind"] == "trap"
+        assert graded["action_correct"] is False
+        assert graded["fabricated_decision"] is True
+
+    def test_trap_extraction_failure_stays_attributed_to_trap_set(self):
+        [graded] = grader.grade_rows(
+            [make_row("t1", "FED", "2024-10-15", None, ok=False)],
+            GOLDEN,
+            ANNOUNCEMENTS,
+            doc_types={"t1": "minutes"},
+        )
+        assert graded["status"] == "extraction_failed"
+        assert graded["expected_kind"] == "trap"
+
+    def test_decision_doc_types_do_not_trigger_trap_grading(self):
+        record = make_record(action="hold")
+        [graded] = grader.grade_rows(
+            [make_row("h1", "FED", "2024-10-15", record)],
+            GOLDEN,
+            ANNOUNCEMENTS,
+            doc_types={"h1": "statement"},
+        )
+        assert graded["expected_kind"] == "hold"
+
+    def test_unknown_doc_id_fails_loudly_with_default_catalogs(self):
+        # A doc_id in neither catalog (e.g. traps.csv missing on a fresh
+        # clone) must never be silently graded as a control document.
+        record = make_record(action="hold")
+        with pytest.raises(ValueError, match="missing from both catalogs"):
+            grader.grade_rows(
+                [make_row("zzz_not_in_any_catalog", "FED", "2024-10-15", record)],
+                GOLDEN,
+                ANNOUNCEMENTS,
+            )
 
 
 class TestUngradeableAndFailures:
@@ -216,7 +277,7 @@ class TestMetrics:
             make_row("h2", "FED", "2024-10-16", make_record(action="cut", change_bps=-25)),
             make_row("f1", "FED", "2024-10-17", None, ok=False),
         ]
-        return grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS), rows
+        return grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS, doc_types={}), rows
 
     def test_summarize_counts_and_hallucination(self):
         graded, rows = self.graded_fixture()
@@ -239,7 +300,7 @@ class TestMetrics:
     def test_wrong_direction_counts_as_hallucination(self):
         rows = [make_row("e1", "FED", "2024-09-18",
                          make_record(action="hike", change_bps=None))]
-        graded = grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS)
+        graded = grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS, doc_types={})
         summary = metrics.summarize(graded, rows)
         assert summary["hallucination_rate"]["rate"] == 1.0
 
@@ -255,7 +316,7 @@ class TestMetrics:
         low = metrics.summarize(graded, rows)
         perfect_rows = [rows[0], rows[1]]
         perfect = metrics.summarize(
-            grader.grade_rows(perfect_rows, GOLDEN, ANNOUNCEMENTS), perfect_rows
+            grader.grade_rows(perfect_rows, GOLDEN, ANNOUNCEMENTS, doc_types={}), perfect_rows
         )
         perfect["model_key"] = "better-model"
         table = metrics.league_table([low, perfect])
@@ -269,3 +330,55 @@ class TestMetrics:
         assert result["n_paired"] == 3
         assert result["only_b_correct"] == 1
         assert result["only_a_correct"] == 0
+
+    def trap_fixture(self):
+        rows = [
+            make_row("h1", "FED", "2024-10-15", make_record(action="hold")),
+            make_row("t1", "FED", "2024-10-15", make_record(action="no_policy_decision")),
+            make_row("t2", "FED", "2024-10-16", make_record(action="hold")),  # false positive
+            make_row("t3", "FED", "2024-10-17", None, ok=False),
+        ]
+        doc_types = {"t1": "minutes", "t2": "minutes", "t3": "non_decision"}
+        return grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS, doc_types=doc_types), rows
+
+    def test_summarize_splits_traps_from_control_metrics(self):
+        graded, rows = self.trap_fixture()
+        summary = metrics.summarize(graded, rows)
+        assert summary["model_key"] == "test-model"
+        assert summary["documents"] == 1  # control documents only
+        assert summary["graded"] == 1
+        assert summary["action_accuracy"]["rate"] == 1.0  # trap mistakes never leak in
+        assert summary["hallucination_rate"]["rate"] == 0.0
+        assert summary["traps"]["documents"] == 3
+        assert summary["traps"]["graded"] == 2
+        assert summary["traps"]["extraction_failed"] == 1
+        # FP rate over ALL trap documents (same denominator for every model);
+        # the failed extraction produced no record, hence no fabrication.
+        assert summary["traps"]["false_positive_rate"]["rate"] == pytest.approx(1 / 3, abs=1e-4)
+        assert summary["traps"]["false_positive_rate"]["n"] == 3
+
+    def test_summarize_keeps_model_attribution_for_trap_only_artifact(self):
+        rows = [make_row("t1", "FED", "2024-10-15", make_record(action="hold"))]
+        graded = grader.grade_rows(rows, GOLDEN, ANNOUNCEMENTS, doc_types={"t1": "minutes"})
+        summary = metrics.summarize(graded, rows)
+        assert summary["model_key"] == "test-model"
+        assert summary["prompt_version"] == "v001"
+        assert summary["documents"] == 0  # no control documents
+
+    def test_league_table_shows_trap_false_positives(self):
+        graded, rows = self.trap_fixture()
+        table = metrics.league_table([metrics.summarize(graded, rows)])
+        assert "trap FP" in table
+        assert "33.3%" in table  # 1 fabrication over all 3 trap documents
+
+    def test_pairwise_mcnemar_excludes_trap_documents(self):
+        graded, _ = self.trap_fixture()
+        flipped = [
+            dict(row, action_correct=not row["action_correct"])
+            if row["expected_kind"] == "trap" and row["status"] == "graded"
+            else dict(row)
+            for row in graded
+        ]
+        [result] = metrics.pairwise_mcnemar({"a": graded, "b": flipped})
+        assert result["n_paired"] == 1  # only the control document pairs
+        assert result["p_value"] == 1.0

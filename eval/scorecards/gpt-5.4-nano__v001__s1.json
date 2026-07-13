@@ -1,31 +1,31 @@
 {
   "model_key": "gpt-5.4-nano",
   "prompt_version": "v001",
-  "documents": 526,
-  "graded": 475,
+  "documents": 527,
+  "graded": 476,
   "extraction_failed": 48,
   "ungradeable": 3,
   "events": 132,
-  "holds": 343,
+  "holds": 344,
   "action_accuracy": {
-    "rate": 0.9621,
-    "n": 475,
+    "rate": 0.9622,
+    "n": 476,
     "ci95": [
-      0.9409,
+      0.941,
       0.9759
     ]
   },
   "hallucination_rate": {
-    "rate": 0.0232,
-    "n": 475,
+    "rate": 0.0231,
+    "n": 476,
     "ci95": [
       0.013,
-      0.041
+      0.0409
     ]
   },
   "fabricated_decision_rate": {
     "rate": 0.0029,
-    "n": 343,
+    "n": 344,
     "ci95": [
       0.0005,
       0.0163
@@ -38,10 +38,10 @@
     "abstained": 0.1298
   },
   "level": {
-    "n": 475,
-    "correct": 0.9305,
+    "n": 476,
+    "correct": 0.9307,
     "wrong": 0.0084,
-    "abstained": 0.0611
+    "abstained": 0.0609
   },
   "effective_date": {
     "n": 132,
@@ -50,12 +50,25 @@
     "abstained": 0.5833
   },
   "decision_date": {
-    "n": 475,
-    "correct": 0.84,
+    "n": 476,
+    "correct": 0.8403,
     "wrong": 0.0,
-    "abstained": 0.16
+    "abstained": 0.1597
   },
-  "cost_usd": 0.0973,
-  "input_tokens": 602179,
-  "output_tokens": 59293
+  "traps": {
+    "documents": 64,
+    "graded": 61,
+    "extraction_failed": 3,
+    "false_positive_rate": {
+      "rate": 0.8438,
+      "n": 64,
+      "ci95": [
+        0.7357,
+        0.9129
+      ]
+    }
+  },
+  "cost_usd": 0.172,
+  "input_tokens": 1301565,
+  "output_tokens": 66613
 }

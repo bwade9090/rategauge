@@ -1,34 +1,34 @@
 {
   "model_key": "gpt-5.4-mini",
   "prompt_version": "v001",
-  "documents": 526,
-  "graded": 467,
+  "documents": 527,
+  "graded": 468,
   "extraction_failed": 56,
   "ungradeable": 3,
   "events": 130,
-  "holds": 337,
+  "holds": 338,
   "action_accuracy": {
-    "rate": 0.8822,
-    "n": 467,
+    "rate": 0.8825,
+    "n": 468,
     "ci95": [
-      0.8498,
-      0.9084
+      0.8501,
+      0.9086
     ]
   },
   "hallucination_rate": {
-    "rate": 0.0921,
-    "n": 467,
+    "rate": 0.0919,
+    "n": 468,
     "ci95": [
-      0.0691,
-      0.1217
+      0.0689,
+      0.1215
     ]
   },
   "fabricated_decision_rate": {
     "rate": 0.0059,
-    "n": 337,
+    "n": 338,
     "ci95": [
       0.0016,
-      0.0214
+      0.0213
     ]
   },
   "change_bps": {
@@ -38,10 +38,10 @@
     "abstained": 0.062
   },
   "level": {
-    "n": 467,
-    "correct": 0.9572,
+    "n": 468,
+    "correct": 0.9573,
     "wrong": 0.0,
-    "abstained": 0.0428
+    "abstained": 0.0427
   },
   "effective_date": {
     "n": 130,
@@ -50,12 +50,25 @@
     "abstained": 0.5308
   },
   "decision_date": {
-    "n": 467,
-    "correct": 0.9422,
+    "n": 468,
+    "correct": 0.9423,
     "wrong": 0.0021,
-    "abstained": 0.0557
+    "abstained": 0.0556
   },
-  "cost_usd": 0.3564,
-  "input_tokens": 594961,
-  "output_tokens": 59252
+  "traps": {
+    "documents": 64,
+    "graded": 59,
+    "extraction_failed": 5,
+    "false_positive_rate": {
+      "rate": 0.7188,
+      "n": 64,
+      "ci95": [
+        0.5987,
+        0.8141
+      ]
+    }
+  },
+  "cost_usd": 0.6304,
+  "input_tokens": 1279290,
+  "output_tokens": 66604
 }

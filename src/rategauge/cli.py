@@ -20,6 +20,12 @@ def main(argv: list[str] | None = None) -> None:
     ingest.add_argument("--catalog", type=Path, default=Path("data/catalog/documents.csv"))
     ingest.add_argument("--bank", choices=["FED", "ECB", "all"], default="all")
 
+    ingest_traps = subparsers.add_parser(
+        "ingest-traps", help="enumerate and cache the trap set (documents with no decision)"
+    )
+    ingest_traps.add_argument("--cache", type=Path, default=Path("data/cache"))
+    ingest_traps.add_argument("--catalog", type=Path, default=Path("data/catalog/traps.csv"))
+
     subparsers.add_parser("smoke", help="verify API keys with one tiny call per provider")
 
     extract = subparsers.add_parser("extract", help="run schema-constrained extraction")
@@ -38,6 +44,9 @@ def main(argv: list[str] | None = None) -> None:
     submit_group.add_argument("--docs", help="comma-separated doc_ids")
     submit_group.add_argument("--dev-set", action="store_true", help="run the 12-doc dev subset")
     submit_group.add_argument("--all", action="store_true", help="every document in the catalog")
+    submit_group.add_argument(
+        "--trap-set", action="store_true", help="every document in the trap catalog"
+    )
     submit.add_argument(
         "--force",
         action="store_true",
@@ -58,6 +67,8 @@ def main(argv: list[str] | None = None) -> None:
         run_golden(args.out)
     elif args.command == "ingest":
         run_ingest(args.cache, args.catalog, args.bank)
+    elif args.command == "ingest-traps":
+        run_ingest_traps(args.cache, args.catalog)
     elif args.command == "smoke":
         run_smoke()
     elif args.command == "extract":
@@ -65,7 +76,13 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "batch":
         if args.batch_command == "submit":
             run_batch_submit(
-                args.model, args.prompt, args.docs, args.dev_set, args.all, args.force
+                args.model,
+                args.prompt,
+                args.docs,
+                args.dev_set,
+                args.all,
+                args.trap_set,
+                args.force,
             )
         elif args.batch_command == "status":
             run_batch_status()
@@ -96,6 +113,17 @@ def run_ingest(cache_dir: Path, catalog_path: Path, bank: str) -> None:
         # A filtered run must not evict the other bank from the shared catalog.
         kept = [ref for ref in common.read_catalog(catalog_path) if ref.bank != bank]
         refs = kept + refs
+    _write_and_fetch(refs, catalog_path, cache_dir)
+
+
+def run_ingest_traps(cache_dir: Path, catalog_path: Path) -> None:
+    refs = list(fed.enumerate_minutes()) + list(ecb.enumerate_non_decisions())
+    _write_and_fetch(refs, catalog_path, cache_dir)
+
+
+def _write_and_fetch(
+    refs: list[common.DocumentRef], catalog_path: Path, cache_dir: Path
+) -> None:
     common.write_catalog(refs, catalog_path)
     documents = common.fetch_documents(refs, common.DocumentCache(cache_dir))
     missing = sorted(ref.doc_id for ref in refs if ref.doc_id not in documents)
@@ -165,6 +193,7 @@ def run_batch_submit(
     docs: str | None,
     dev_set: bool,
     all_docs: bool,
+    trap_set: bool,
     force: bool,
 ) -> None:
     from rategauge import corpus
@@ -176,6 +205,8 @@ def run_batch_submit(
         doc_ids = DEV_SET
     elif all_docs:
         doc_ids = tuple(ref.doc_id for ref in common.read_catalog(corpus.CATALOG_PATH))
+    elif trap_set:
+        doc_ids = tuple(ref.doc_id for ref in common.read_catalog(corpus.TRAPS_CATALOG_PATH))
     else:
         doc_ids = tuple(part.strip() for part in docs.split(",") if part.strip())
     state = submit_batch(model_key, prompt_version, doc_ids, force=force)

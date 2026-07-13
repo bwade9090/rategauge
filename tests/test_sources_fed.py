@@ -108,6 +108,122 @@ class TestEnumerate:
         assert refs["fed_20250618a"].url.endswith("monetary20250618a.htm")
 
 
+MINUTES_HISTORICAL_PAGE = """<html><body><div class="panel">
+<h5>January 29-30 Meeting - 2008</h5>
+<p>Minutes (Released Feb 20, 2008): <a href="/monetarypolicy/fomcminutes20080130.htm">HTML</a> | <a href="/monetarypolicy/files/fomcminutes20080130.pdf">364 KB PDF</a></p>
+<p>Minutes (Released Feb 20, 2008): <a href="/monetarypolicy/fomcminutes20080130.htm">HTML</a></p>
+<p><a href="/fomc/minutes/20080505.htm">Minutes</a> (Released May 22, 2008)</p>
+<p><a href="http://www.federalreserve.gov/fomc/minutes/20030318.htm#March2003minutes">Minutes</a></p>
+<p><a href="/fomc/minutes/20070918.htm#august10">Minutes</a></p>
+<p><a href="/monetarypolicy/beigebook/beigebook20150304.htm">HTML</a></p>
+<p><a href="/monetarypolicy/fomcprojtabl20150318.htm">HTML</a></p>
+</div></body></html>"""
+
+
+class TestEnumerateMinutes:
+    def enumerate(self, sample_years=(2008,)):
+        def handler(request: httpx.Request) -> httpx.Response:
+            page = (
+                CALENDAR_PAGE if "fomccalendars" in str(request.url) else MINUTES_HISTORICAL_PAGE
+            )
+            return httpx.Response(200, text=page)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        return fed.enumerate_minutes(
+            client=client, historical_years=(2008,), sample_years=sample_years
+        )
+
+    def test_first_meeting_selected_with_index_release_date(self):
+        [ref] = self.enumerate()
+        assert ref.doc_id == "fed_min_20080130"  # January beats May; namespaced id
+        assert ref.doc_type == "minutes"
+        # The release date comes from the index "(Released ...)" text — the
+        # URL digits encode the MEETING date, three to seven weeks earlier.
+        assert ref.announcement_date == date(2008, 2, 20)
+        assert ref.url.endswith("/monetarypolicy/fomcminutes20080130.htm")
+
+    def test_traps_rejected(self):
+        # 2003/2007/2015 appear only via trap links (absolute URL, #fragment,
+        # Beige Book, SEP projections) — none may be enumerated.
+        with pytest.raises(RuntimeError, match="no FOMC minutes"):
+            self.enumerate(sample_years=(2003, 2007, 2015))
+
+    def test_missing_year_fails_loudly(self):
+        with pytest.raises(RuntimeError, match="2009"):
+            self.enumerate(sample_years=(2008, 2009))
+
+    def test_post_march_first_meeting_rejected(self):
+        # The calendar fixture's only 2025 minutes is the June meeting: a
+        # first-of-year pick in June means the index lost entries.
+        with pytest.raises(RuntimeError, match="post-March"):
+            self.enumerate(sample_years=(2025,))
+
+
+def _minutes_paragraphs(count=80):
+    return "".join(
+        f"<p>Participants discussed agenda topic {i} at considerable length, reviewing "
+        "economic developments and the outlook for policy over coming quarters.</p>"
+        for i in range(count)
+    )
+
+
+MINUTES_MODERN_PAGE = f"""<html><body><div id="article">
+<h3>Minutes of the Federal Open Market Committee</h3>
+<p>January 30–31, 2024</p>
+{_minutes_paragraphs()}
+<blockquote>Directive text quoted here for the record.</blockquote>
+<p><a href="/monetarypolicy/fomcminutes20240131a.htm">Accessible materials</a></p>
+</div>
+<div id="lastUpdate" class="lastUpdate">Last Update: February 21, 2024</div>
+</body></html>"""
+
+MINUTES_LEFTTEXT_PAGE = f"""<html><body><div id="TwoColumns"><div id="leftText">
+{_minutes_paragraphs()}
+<p>Return to top</p>
+</div></div>
+<div id="lastUpdate">Last update: February 16, 2011</div>
+</body></html>"""
+
+# Legacy /fomc/minutes/ page: no container ids, unclosed <p> everywhere.
+MINUTES_LEGACY_PAGE = (
+    "<html><body><table><tr><td>Minutes of the Federal Open Market Committee</td></tr></table>"
+    + "".join(
+        f"<p>Unclosed paragraph number {i} in the legacy markup with plenty of committee "
+        "discussion text about economic conditions and appropriate policy."
+        for i in range(80)
+    )
+    + "<p>Return to top<p>Last update: March 23, 2000</body></html>"
+)
+
+
+class TestExtractMinutes:
+    def test_modern_article_without_body_div(self):
+        text = fed.extract_minutes_text(MINUTES_MODERN_PAGE)
+        assert text.startswith("Published: February 21, 2024")  # from div#lastUpdate
+        assert "January 30–31, 2024" in text  # meeting-date paragraph kept
+        assert "agenda topic 3" in text
+        assert "Directive text quoted here" in text  # blockquote captured once
+        assert "Accessible materials" not in text  # link-only paragraph
+
+    def test_lefttext_template(self):
+        text = fed.extract_minutes_text(MINUTES_LEFTTEXT_PAGE)
+        assert text.startswith("Published: February 16, 2011")
+        assert "agenda topic 79" in text
+        assert "Return to top" not in text
+
+    def test_legacy_unclosed_p_not_duplicated(self):
+        text = fed.extract_minutes_text(MINUTES_LEGACY_PAGE)
+        assert text.startswith("Published: March 23, 2000")  # footer 'Last update:' line
+        assert text.count("paragraph number 3 in") == 1  # own-text rule, no re-emission
+        assert "Return to top" not in text
+        assert "Last update" not in text
+
+    def test_short_extraction_fails_loudly(self):
+        page = "<html><body><div id='article'><p>tiny</p></div></body></html>"
+        with pytest.raises(ValueError, match="suspiciously short"):
+            fed.extract_minutes_text(page)
+
+
 class TestExtractModern:
     def test_body_only_with_junk_stripped(self):
         text = fed.extract_text(MODERN_PAGE)

@@ -43,7 +43,7 @@ class DocumentRef:
     doc_id: str  # stable slug, e.g. "fed_20250618a", "ecb_mp260611"
     announcement_date: date
     url: str
-    doc_type: str  # "statement" | "decision"
+    doc_type: str  # decision docs: "statement" | "decision"; traps: "minutes" | "non_decision"
 
 
 def get_with_retries(client: httpx.Client, url: str, *, retries: int = 3) -> httpx.Response:

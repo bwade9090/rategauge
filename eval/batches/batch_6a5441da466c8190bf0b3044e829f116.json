@@ -1,0 +1,338 @@
+{
+  "batch_id": "batch_6a5441da466c8190bf0b3044e829f116",
+  "provider": "openai",
+  "model_key": "gpt-5.4-nano",
+  "prompt_version": "v001",
+  "schema_version": "s1",
+  "submitted_at_utc": "2026-07-13T01:39:39+00:00",
+  "status": "completed",
+  "collected": true,
+  "estimated_input_tokens": 961197,
+  "documents": [
+    {
+      "doc_id": "ecb_pr200318_1",
+      "bank": "ECB",
+      "announcement_date": "2020-03-18"
+    },
+    {
+      "doc_id": "ecb_pr200430",
+      "bank": "ECB",
+      "announcement_date": "2020-04-30"
+    },
+    {
+      "doc_id": "ecb_pr200430_1",
+      "bank": "ECB",
+      "announcement_date": "2020-04-30"
+    },
+    {
+      "doc_id": "ecb_mg220707",
+      "bank": "ECB",
+      "announcement_date": "2022-07-07"
+    },
+    {
+      "doc_id": "ecb_pr220721",
+      "bank": "ECB",
+      "announcement_date": "2022-07-21"
+    },
+    {
+      "doc_id": "ecb_mg220825",
+      "bank": "ECB",
+      "announcement_date": "2022-08-25"
+    },
+    {
+      "doc_id": "ecb_pr220908",
+      "bank": "ECB",
+      "announcement_date": "2022-09-08"
+    },
+    {
+      "doc_id": "ecb_mg221006",
+      "bank": "ECB",
+      "announcement_date": "2022-10-06"
+    },
+    {
+      "doc_id": "ecb_pr221027",
+      "bank": "ECB",
+      "announcement_date": "2022-10-27"
+    },
+    {
+      "doc_id": "ecb_pr221027_1",
+      "bank": "ECB",
+      "announcement_date": "2022-10-27"
+    },
+    {
+      "doc_id": "ecb_mg221124",
+      "bank": "ECB",
+      "announcement_date": "2022-11-24"
+    },
+    {
+      "doc_id": "ecb_mg230119",
+      "bank": "ECB",
+      "announcement_date": "2023-01-19"
+    },
+    {
+      "doc_id": "ecb_pr230202",
+      "bank": "ECB",
+      "announcement_date": "2023-02-02"
+    },
+    {
+      "doc_id": "ecb_mg230302",
+      "bank": "ECB",
+      "announcement_date": "2023-03-02"
+    },
+    {
+      "doc_id": "ecb_mg230420",
+      "bank": "ECB",
+      "announcement_date": "2023-04-20"
+    },
+    {
+      "doc_id": "ecb_mg230601",
+      "bank": "ECB",
+      "announcement_date": "2023-06-01"
+    },
+    {
+      "doc_id": "ecb_mg230713",
+      "bank": "ECB",
+      "announcement_date": "2023-07-13"
+    },
+    {
+      "doc_id": "ecb_pr230727",
+      "bank": "ECB",
+      "announcement_date": "2023-07-27"
+    },
+    {
+      "doc_id": "ecb_mg230831",
+      "bank": "ECB",
+      "announcement_date": "2023-08-31"
+    },
+    {
+      "doc_id": "ecb_mg231012",
+      "bank": "ECB",
+      "announcement_date": "2023-10-12"
+    },
+    {
+      "doc_id": "ecb_mg231123",
+      "bank": "ECB",
+      "announcement_date": "2023-11-23"
+    },
+    {
+      "doc_id": "ecb_mg240118",
+      "bank": "ECB",
+      "announcement_date": "2024-01-18"
+    },
+    {
+      "doc_id": "ecb_mg240222",
+      "bank": "ECB",
+      "announcement_date": "2024-02-22"
+    },
+    {
+      "doc_id": "ecb_mg240404",
+      "bank": "ECB",
+      "announcement_date": "2024-04-04"
+    },
+    {
+      "doc_id": "ecb_mg240510",
+      "bank": "ECB",
+      "announcement_date": "2024-05-10"
+    },
+    {
+      "doc_id": "ecb_mg240704",
+      "bank": "ECB",
+      "announcement_date": "2024-07-04"
+    },
+    {
+      "doc_id": "ecb_mg240822",
+      "bank": "ECB",
+      "announcement_date": "2024-08-22"
+    },
+    {
+      "doc_id": "ecb_mg241010",
+      "bank": "ECB",
+      "announcement_date": "2024-10-10"
+    },
+    {
+      "doc_id": "ecb_mg241114",
+      "bank": "ECB",
+      "announcement_date": "2024-11-14"
+    },
+    {
+      "doc_id": "ecb_mg250116",
+      "bank": "ECB",
+      "announcement_date": "2025-01-16"
+    },
+    {
+      "doc_id": "ecb_mg250403",
+      "bank": "ECB",
+      "announcement_date": "2025-04-03"
+    },
+    {
+      "doc_id": "ecb_mg250522",
+      "bank": "ECB",
+      "announcement_date": "2025-05-22"
+    },
+    {
+      "doc_id": "ecb_mg250703",
+      "bank": "ECB",
+      "announcement_date": "2025-07-03"
+    },
+    {
+      "doc_id": "ecb_mg250828",
+      "bank": "ECB",
+      "announcement_date": "2025-08-28"
+    },
+    {
+      "doc_id": "ecb_mg251009",
+      "bank": "ECB",
+      "announcement_date": "2025-10-09"
+    },
+    {
+      "doc_id": "ecb_mg251127",
+      "bank": "ECB",
+      "announcement_date": "2025-11-27"
+    },
+    {
+      "doc_id": "ecb_mg260122",
+      "bank": "ECB",
+      "announcement_date": "2026-01-22"
+    },
+    {
+      "doc_id": "ecb_mg260305",
+      "bank": "ECB",
+      "announcement_date": "2026-03-05"
+    },
+    {
+      "doc_id": "ecb_mg260416",
+      "bank": "ECB",
+      "announcement_date": "2026-04-16"
+    },
+    {
+      "doc_id": "fed_min_20000202",
+      "bank": "FED",
+      "announcement_date": "2000-03-23"
+    },
+    {
+      "doc_id": "fed_min_20010131",
+      "bank": "FED",
+      "announcement_date": "2001-03-22"
+    },
+    {
+      "doc_id": "fed_min_20020130",
+      "bank": "FED",
+      "announcement_date": "2002-03-21"
+    },
+    {
+      "doc_id": "fed_min_20030129",
+      "bank": "FED",
+      "announcement_date": "2003-03-20"
+    },
+    {
+      "doc_id": "fed_min_20040128",
+      "bank": "FED",
+      "announcement_date": "2004-03-18"
+    },
+    {
+      "doc_id": "fed_min_20050202",
+      "bank": "FED",
+      "announcement_date": "2005-02-23"
+    },
+    {
+      "doc_id": "fed_min_20060131",
+      "bank": "FED",
+      "announcement_date": "2006-02-21"
+    },
+    {
+      "doc_id": "fed_min_20070131",
+      "bank": "FED",
+      "announcement_date": "2007-02-21"
+    },
+    {
+      "doc_id": "fed_min_20080130",
+      "bank": "FED",
+      "announcement_date": "2008-02-20"
+    },
+    {
+      "doc_id": "fed_min_20090128",
+      "bank": "FED",
+      "announcement_date": "2009-02-18"
+    },
+    {
+      "doc_id": "fed_min_20100127",
+      "bank": "FED",
+      "announcement_date": "2010-02-17"
+    },
+    {
+      "doc_id": "fed_min_20110126",
+      "bank": "FED",
+      "announcement_date": "2011-02-16"
+    },
+    {
+      "doc_id": "fed_min_20120125",
+      "bank": "FED",
+      "announcement_date": "2012-02-15"
+    },
+    {
+      "doc_id": "fed_min_20130130",
+      "bank": "FED",
+      "announcement_date": "2013-02-20"
+    },
+    {
+      "doc_id": "fed_min_20140129",
+      "bank": "FED",
+      "announcement_date": "2014-02-19"
+    },
+    {
+      "doc_id": "fed_min_20150128",
+      "bank": "FED",
+      "announcement_date": "2015-02-18"
+    },
+    {
+      "doc_id": "fed_min_20160127",
+      "bank": "FED",
+      "announcement_date": "2016-02-17"
+    },
+    {
+      "doc_id": "fed_min_20170201",
+      "bank": "FED",
+      "announcement_date": "2017-02-22"
+    },
+    {
+      "doc_id": "fed_min_20180131",
+      "bank": "FED",
+      "announcement_date": "2018-02-21"
+    },
+    {
+      "doc_id": "fed_min_20190130",
+      "bank": "FED",
+      "announcement_date": "2019-02-20"
+    },
+    {
+      "doc_id": "fed_min_20200129",
+      "bank": "FED",
+      "announcement_date": "2020-02-19"
+    },
+    {
+      "doc_id": "fed_min_20210127",
+      "bank": "FED",
+      "announcement_date": "2021-02-17"
+    },
+    {
+      "doc_id": "fed_min_20220126",
+      "bank": "FED",
+      "announcement_date": "2022-02-16"
+    },
+    {
+      "doc_id": "fed_min_20230201",
+      "bank": "FED",
+      "announcement_date": "2023-02-22"
+    },
+    {
+      "doc_id": "fed_min_20240131",
+      "bank": "FED",
+      "announcement_date": "2024-02-21"
+    }
+  ],
+  "openai_input_file_id": "file-1EB4aVnU7QugNPeT3AJi3X",
+  "openai_output_file_id": "file-Eh7oqZcyX6E8aoTUdBgiof",
+  "openai_error_file_id": null,
+  "collected_at_utc": "2026-07-13T01:43:50+00:00",
+  "missing_doc_ids": []
+}

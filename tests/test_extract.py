@@ -81,6 +81,24 @@ class TestCorpus:
         with pytest.raises(KeyError, match="rategauge ingest"):
             corpus.load_documents(["fed_nope"], catalog_path=catalog, cache_dir=cache_dir)
 
+    def test_trap_catalog_merged_into_lookup(self, tmp_path):
+        catalog, cache_dir = self.make_corpus(tmp_path)
+        trap_ref = DocumentRef("ECB", "ecb_trap1", date(2025, 2, 6), "https://x/t", "non_decision")
+        traps = tmp_path / "traps.csv"
+        common.write_catalog([trap_ref], traps)
+        common.DocumentCache(cache_dir).put(trap_ref, ECB_PAGE)
+        [doc] = corpus.load_documents(
+            ["ecb_trap1"], catalog_path=catalog, traps_path=traps, cache_dir=cache_dir
+        )
+        assert doc.ref.doc_type == "non_decision"
+        # ECB non-decision docs are still press releases; the label stays honest.
+        assert doc.as_model_input().startswith("Source: European Central Bank press release")
+
+    def test_minutes_get_publication_source_label(self):
+        ref = DocumentRef("FED", "fed_x", date(2024, 1, 1), "https://x", "minutes")
+        doc = corpus.LoadedDocument(ref=ref, text="text")
+        assert doc.as_model_input().startswith("Source: Federal Reserve (FOMC) publication")
+
 
 class TestRunner:
     def run(self, tmp_path, monkeypatch, payloads, doc_ids=None):

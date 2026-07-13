@@ -38,10 +38,18 @@ from rategauge.sources.common import read_catalog
 
 GOLDEN_PATH = Path("data/golden/cbpol_events.csv")
 CATALOG_PATH = Path("data/catalog/documents.csv")
+TRAPS_CATALOG_PATH = Path("data/catalog/traps.csv")
 
 REF_AREA = {"FED": "US", "ECB": "XM"}
 WINDOW_DAYS = {"FED": 5, "ECB": 10}
 LEVEL_TOLERANCE = 0.005
+
+# Trap documents (official publications that do NOT announce a policy-rate
+# decision — FOMC minutes, ECB non-decision monetary-policy releases). The
+# only correct extraction is action == "no_policy_decision"; asserting any
+# decision (hike, cut, or hold) fabricates a decision record that does not
+# exist, which is exactly the false positive the trap set measures.
+TRAP_DOC_TYPES = frozenset({"minutes", "non_decision"})
 
 # 2008-12-16: the Fed switched from a point target (1.0%) to a target range
 # (0-0.25%). The golden change (-88 bp) is a midpoint-convention artifact no
@@ -112,11 +120,27 @@ class GoldenSeries:
 
 
 def load_announcements(catalog_path: Path = CATALOG_PATH) -> dict[str, list[date]]:
-    """Sorted announcement dates per bank, for event-ownership resolution."""
+    """Sorted announcement dates per bank, for event-ownership resolution.
+
+    Deliberately reads only the decision-document catalog: trap documents
+    (minutes are released weeks after the meeting) must never enter the
+    ownership timeline, or they would steal golden events from the statements
+    that actually announced them.
+    """
     announcements: dict[str, list[date]] = {}
     for ref in read_catalog(catalog_path):
         announcements.setdefault(ref.bank, []).append(ref.announcement_date)
     return {bank: sorted(dates) for bank, dates in announcements.items()}
+
+
+def load_doc_types(
+    catalog_path: Path = CATALOG_PATH, traps_path: Path = TRAPS_CATALOG_PATH
+) -> dict[str, str]:
+    """doc_id -> doc_type across the decision catalog and the trap catalog."""
+    doc_types = {ref.doc_id: ref.doc_type for ref in read_catalog(catalog_path)}
+    if traps_path.exists():
+        doc_types.update({ref.doc_id: ref.doc_type for ref in read_catalog(traps_path)})
+    return doc_types
 
 
 def _owns_event(announced: date, effective: date, bank_announcements: list[date]) -> bool:
@@ -133,17 +157,36 @@ def grade_rows(
     artifact_rows: list[dict],
     golden: dict[str, GoldenSeries] | None = None,
     announcements: dict[str, list[date]] | None = None,
+    doc_types: dict[str, str] | None = None,
 ) -> list[dict]:
     """Grade one artifact (one model x prompt) row by row."""
     golden = golden or GoldenSeries.load_all()
     announcements = announcements or load_announcements()
+    if doc_types is None:
+        doc_types = load_doc_types()
+        # A doc_id in neither catalog means a stale/missing catalog file
+        # (e.g. traps.csv absent): grading it as a control document would
+        # silently corrupt every published metric — fail loudly instead.
+        unknown = sorted({row["doc_id"] for row in artifact_rows} - doc_types.keys())
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} artifact doc_id(s) missing from both catalogs "
+                f"(is data/catalog/traps.csv present and current?): {unknown[:5]}"
+            )
     return [
-        _grade_row(row, golden[REF_AREA[row["bank"]]], announcements[row["bank"]])
+        _grade_row(
+            row,
+            golden[REF_AREA[row["bank"]]],
+            announcements[row["bank"]],
+            is_trap=doc_types.get(row["doc_id"]) in TRAP_DOC_TYPES,
+        )
         for row in artifact_rows
     ]
 
 
-def _grade_row(row: dict, series: GoldenSeries, bank_announcements: list[date]) -> dict:
+def _grade_row(
+    row: dict, series: GoldenSeries, bank_announcements: list[date], *, is_trap: bool = False
+) -> dict:
     graded = {
         "doc_id": row["doc_id"],
         "bank": row["bank"],
@@ -160,8 +203,22 @@ def _grade_row(row: dict, series: GoldenSeries, bank_announcements: list[date]) 
         "effective_date": None,
         "decision_date": None,  # "correct" | "wrong" | "abstained" (all docs)
     }
+    if is_trap:
+        # Stamped before the failure check so trap extraction failures are
+        # still attributable to the trap set in the metrics split.
+        graded["expected_kind"] = "trap"
     if not row["ok"]:
         graded["status"] = "extraction_failed"
+        return graded
+
+    if is_trap:
+        # No golden join: the document announces no policy-rate decision, so
+        # the only correct action is the abstention label. Rate/date fields
+        # are meaningless here (minutes legitimately restate prevailing rates)
+        # and stay None.
+        action = row["record"].get("action")
+        graded["action_correct"] = action == "no_policy_decision"
+        graded["fabricated_decision"] = action in ("hike", "cut", "hold")
         return graded
 
     announced = date.fromisoformat(row["announcement_date"])

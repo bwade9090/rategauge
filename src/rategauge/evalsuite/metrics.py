@@ -60,7 +60,15 @@ def _three_way_rates(values: list[str]) -> dict:
 
 
 def summarize(graded_rows: list[dict], artifact_rows: list[dict]) -> dict:
-    """One scorecard for one (model, prompt) artifact."""
+    """One scorecard for one (model, prompt) artifact.
+
+    Trap documents (expected_kind == "trap") are reported separately and are
+    excluded from every control-document metric, so headline accuracy and
+    hallucination rates stay comparable whether or not the trap set was run.
+    """
+    all_rows = graded_rows
+    trap_rows = [row for row in all_rows if row["expected_kind"] == "trap"]
+    graded_rows = [row for row in all_rows if row["expected_kind"] != "trap"]
     graded = [row for row in graded_rows if row["status"] == "graded"]
     events = [row for row in graded if row["expected_kind"] == "change"]
     holds = [row for row in graded if row["expected_kind"] == "hold"]
@@ -77,8 +85,8 @@ def summarize(graded_rows: list[dict], artifact_rows: list[dict]) -> dict:
     ]
 
     return {
-        "model_key": graded_rows[0]["model_key"] if graded_rows else None,
-        "prompt_version": graded_rows[0]["prompt_version"] if graded_rows else None,
+        "model_key": all_rows[0]["model_key"] if all_rows else None,
+        "prompt_version": all_rows[0]["prompt_version"] if all_rows else None,
         "documents": len(graded_rows),
         "graded": len(graded),
         "extraction_failed": sum(1 for r in graded_rows if r["status"] == "extraction_failed"),
@@ -98,6 +106,20 @@ def summarize(graded_rows: list[dict], artifact_rows: list[dict]) -> dict:
         "decision_date": _three_way_rates(
             [row["decision_date"] for row in graded if row["decision_date"]]
         ),
+        "traps": {
+            "documents": len(trap_rows),
+            "graded": sum(1 for row in trap_rows if row["status"] == "graded"),
+            "extraction_failed": sum(
+                1 for row in trap_rows if row["status"] == "extraction_failed"
+            ),
+            # A fabricated decision on a document that announces none — the
+            # false positive the trap set exists to measure. Computed over ALL
+            # trap documents (a failed extraction produced no record, hence no
+            # fabrication) so every model shares the same denominator.
+            "false_positive_rate": _rate(
+                [bool(row.get("fabricated_decision")) for row in trap_rows]
+            ),
+        },
         "cost_usd": round(sum(row["cost_usd"] for row in artifact_rows), 4),
         "input_tokens": sum(row["input_tokens"] for row in artifact_rows),
         "output_tokens": sum(row["output_tokens"] for row in artifact_rows),
@@ -112,7 +134,7 @@ def pairwise_mcnemar(graded_by_model: dict[str, list[dict]]) -> list[dict]:
         key: {
             row["doc_id"]: bool(row["action_correct"])
             for row in graded_by_model[key]
-            if row["status"] == "graded"
+            if row["status"] == "graded" and row["expected_kind"] != "trap"
         }
         for key in keys
     }
@@ -153,8 +175,8 @@ def league_table(summaries: list[dict]) -> str:
 
     lines = [
         "| model | graded | action acc. (95% CI) | hallucination (95% CI) | bps ok "
-        "| level ok | eff.date ok | cost |",
-        "|---|---|---|---|---|---|---|---|",
+        "| level ok | eff.date ok | trap FP (95% CI) | cost |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     ranked = sorted(
         summaries, key=lambda s: s["action_accuracy"].get("rate") or 0, reverse=True
@@ -168,6 +190,7 @@ def league_table(summaries: list[dict]) -> str:
             f"| {fmt_three(summary['change_bps'])} "
             f"| {fmt_three(summary['level'])} "
             f"| {fmt_three(summary['effective_date'])} "
+            f"| {fmt_rate(summary.get('traps', {}).get('false_positive_rate'))} "
             f"| ${summary['cost_usd']:.2f} |"
         )
     return "\n".join(lines)

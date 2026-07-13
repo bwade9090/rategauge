@@ -32,7 +32,7 @@ table layout (pre-2006), where the statement text sits between two
 import logging
 import re
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 from bs4 import BeautifulSoup
@@ -58,6 +58,25 @@ HISTORICAL_HREFS = (
 )
 
 BOARDDOCS_COMMENT = re.compile(r"<!-+[^>]*?DO NOT REMOVE[\s\S]*?-+>")
+
+# Minutes links (trap set). Verified DOM facts (2026-07-08): the calendar page
+# links minutes as text "HTML" inside div.fomc-meeting__minutes; historical
+# pages link text "Minutes" -> /fomc/minutes/YYYYMMDD.htm for meetings through
+# 2007-09-18 and text "HTML" -> /monetarypolicy/fomcminutesYYYYMMDD.htm from
+# 2007-10-31 on. The strict href regexes reject the observed traps: Beige Book
+# links (text also "HTML", /monetarypolicy/beigebook/...), SEP projections
+# (/monetarypolicy/fomcprojtabl...), PDF variants, and conference-call minutes
+# folded into another document as absolute-URL/#fragment links.
+MINUTES_HREFS = (
+    re.compile(r"^/monetarypolicy/fomcminutes(\d{8})\.htm$"),
+    re.compile(r"^/fomc/minutes/(\d{8})\.htm$"),
+)
+# URL digits encode the MEETING date; the release lags by 3 weeks (modern) to
+# 7 weeks (2000-2004). The release date lives in the index "(Released ...)"
+# text next to each minutes link — full month names 2000-2004 and 2011+,
+# abbreviated 2005-2010.
+MINUTES_RELEASED_TEXT = re.compile(r"\(Released ([^)]+)\)")
+MINUTES_SAMPLE_YEARS = tuple(range(2000, 2025))
 
 
 def enumerate_statements(
@@ -90,6 +109,111 @@ def enumerate_statements(
     if verify_coverage:
         _verify_yearly_coverage(refs.values())
     return sorted(refs.values(), key=lambda ref: (ref.announcement_date, ref.doc_id))
+
+
+def enumerate_minutes(
+    *,
+    client: httpx.Client | None = None,
+    historical_years: tuple[int, ...] = HISTORICAL_YEARS,
+    sample_years: tuple[int, ...] = MINUTES_SAMPLE_YEARS,
+) -> list[DocumentRef]:
+    """FOMC minutes of the first scheduled meeting of each sample year (traps).
+
+    Minutes never announce a decision — they recount one, weeks later — so the
+    only correct extraction is action == "no_policy_decision". The sampling
+    rule (earliest meeting per year) is deterministic and documented here;
+    announcement_date is the RELEASE date parsed from the index "(Released
+    ...)" text, because the URL digits encode the meeting date instead.
+    """
+    owns_client = client is None
+    client = client or default_client(browser_headers=True)
+    refs: dict[str, DocumentRef] = {}
+    try:
+        calendar = _get_soup(client, CALENDAR_URL)
+        _collect_minutes(calendar, link_text="HTML", into=refs)
+        for year in historical_years:
+            page = _get_soup(client, HISTORICAL_URL_TEMPLATE.format(year=year))
+            _collect_minutes(page, link_text="Minutes", into=refs)
+            _collect_minutes(page, link_text="HTML", into=refs)
+    finally:
+        if owns_client:
+            client.close()
+    return sorted(
+        _first_meeting_per_year(refs.values(), sample_years), key=lambda ref: ref.doc_id
+    )
+
+
+def _collect_minutes(soup: BeautifulSoup, *, link_text: str, into: dict) -> None:
+    for anchor in soup.find_all("a"):
+        if anchor.get_text(strip=True) != link_text:
+            continue
+        href = anchor.get("href") or ""
+        match = next((m for m in (p.match(href) for p in MINUTES_HREFS) if m is not None), None)
+        if match is None:
+            continue
+        digits = match.group(1)
+        doc_id = f"fed_min_{digits}"  # namespaced: boarddocs statements already own fed_{digits}
+        if doc_id in into:
+            continue
+        meeting = date(int(digits[:4]), int(digits[4:6]), int(digits[6:8]))
+        into[doc_id] = DocumentRef(
+            bank="FED",
+            doc_id=doc_id,
+            announcement_date=_minutes_release_date(anchor, meeting),
+            url=BASE_URL + href,
+            doc_type="minutes",
+        )
+
+
+def _minutes_release_date(anchor, meeting: date) -> date:
+    node = anchor.parent
+    for _ in range(4):  # the "(Released ...)" text sits in a nearby ancestor block
+        if node is None:
+            break
+        match = MINUTES_RELEASED_TEXT.search(node.get_text(" ", strip=True))
+        if match:
+            parsed = _parse_release_date(match.group(1))
+            if parsed is not None:
+                return parsed
+        node = node.parent
+    logger.warning("no release date found for minutes of %s; falling back to meeting date",
+                   meeting)
+    return meeting
+
+
+def _parse_release_date(text: str) -> date | None:
+    text = normalize_text(text).replace(".", "")
+    for fmt in ("%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _meeting_date(doc_id: str) -> date:
+    digits = doc_id.removeprefix("fed_min_")
+    return date(int(digits[:4]), int(digits[4:6]), int(digits[6:8]))
+
+
+def _first_meeting_per_year(refs, sample_years: tuple[int, ...]) -> list[DocumentRef]:
+    by_year: dict[int, DocumentRef] = {}
+    for ref in refs:
+        meeting = _meeting_date(ref.doc_id)
+        if meeting.year not in sample_years:
+            continue
+        current = by_year.get(meeting.year)
+        if current is None or meeting < _meeting_date(current.doc_id):
+            by_year[meeting.year] = ref
+    missing = [year for year in sample_years if year not in by_year]
+    if missing:
+        raise RuntimeError(f"no FOMC minutes found for year(s) {missing} — index layout moved?")
+    late = [ref.doc_id for ref in by_year.values() if _meeting_date(ref.doc_id).month > 3]
+    if late:
+        # First scheduled meetings are always Jan/Feb; a later pick means the
+        # index dropped entries or an unscheduled meeting leaked in.
+        raise RuntimeError(f"first-meeting sample picked a post-March meeting: {late}")
+    return list(by_year.values())
 
 
 def _verify_yearly_coverage(refs) -> None:
@@ -177,6 +301,58 @@ def _extract_modern(article) -> str:
     if not paragraphs:
         raise ValueError("no statement text extracted from modern Fed page")
     return "\n\n".join(paragraphs)
+
+
+def extract_minutes_text(html: str) -> str:
+    """Extract FOMC minutes text across all three page templates (2026-07-08).
+
+    Modern pages put the body as direct <p>/<blockquote> children of
+    div#article (no col-sm-8 wrapper, so ``extract_text`` cannot serve them);
+    2008-2010-vintage pages use div#leftText; legacy /fomc/minutes/ pages have
+    no container ids at all, and pre-2003 files leave most <p> unclosed
+    (html.parser nests them), so text is taken per element via the own-text
+    rule everywhere.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.find("div", id="article") or soup.find("div", id="leftText") or soup
+    paragraphs: list[str] = []
+    published = _minutes_release_line(soup)
+    if published:
+        paragraphs.append(published)
+    for element in container.find_all(["p", "li", "blockquote"]):
+        own = " ".join(
+            str(string)
+            for string in element.find_all(string=True)
+            if string.find_parent(["p", "li", "blockquote"]) is element
+        )
+        text = normalize_text(own)
+        if not text or text == "Return to top":
+            continue
+        if text.startswith(("Last update:", "Last Update:")):
+            continue  # footer; already captured as the "Published:" line
+        anchors = element.find_all("a")
+        if anchors and normalize_text(anchors[0].get_text(" ", strip=True)) == text:
+            continue  # link-only paragraph (accessible-materials tail etc.)
+        paragraphs.append(text)
+    body = "\n\n".join(paragraphs)
+    if len(body) < 5000:
+        # Real minutes run tens of thousands of characters; a short result
+        # means a template drifted and we silently grabbed navigation junk.
+        raise ValueError(f"minutes extraction suspiciously short ({len(body)} chars)")
+    return body
+
+
+def _minutes_release_line(soup: BeautifulSoup) -> str | None:
+    """The release date: div#lastUpdate (2008+) or the footer 'Last update:'
+    string (legacy) — verified equal to the index-stated release date."""
+    node = soup.find("div", id="lastUpdate")
+    text = normalize_text(node.get_text(" ", strip=True)) if node is not None else None
+    if not text:
+        line = soup.find(string=re.compile(r"Last [Uu]pdate:"))
+        text = normalize_text(str(line)) if line else None
+    if not text:
+        return None
+    return "Published: " + re.sub(r"^Last [Uu]pdate:\s*", "", text)
 
 
 def _extract_boarddocs(html: str, soup: BeautifulSoup) -> str:

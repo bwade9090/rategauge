@@ -40,6 +40,20 @@ DECISION_HREF = re.compile(
 )
 DECISION_TITLE = "Monetary policy decisions"
 
+# Trap-set enumeration (verified 2026-07-08). Non-decision English press
+# releases under /press/pr/date/ ALL use an ``ecb.pr`` prefix (with optional
+# _N before the tilde) — zero non-decision items exist in the decision URL
+# forms (ecb.mp*, legacy pr######). Those forms are deliberately NOT matched
+# here, so a decision release whose index title drifts (like the title-case
+# 2016-12-08 hold) can never be misclassified into the trap set. Meeting
+# accounts (the ECB's minutes) live under /press/accounts/. Combined PDFs
+# (ecb.ds*), press-conference statements (ecb.is* — they restate the decisions
+# verbatim), and /pub/pdf/ items are rejected by these href rules.
+NON_DECISION_HREF = re.compile(
+    r"^/press/pr/date/\d{4}/html/ecb\.pr\d{6}(?:_\d+)?~[0-9a-f]+\.en\.html$"
+)
+ACCOUNTS_HREF = re.compile(r"^/press/accounts/\d{4}/html/ecb\.mg\d{6}~[0-9a-f]+\.en\.html$")
+
 BODY_BLOCK_CLASSES = frozenset({"section", "orderedlist"})
 
 
@@ -76,14 +90,14 @@ def enumerate_decisions(
 def _classify_anchor(anchor) -> DocumentRef | None:
     """Apply the verified keep-rule; return a ref or None.
 
-    Keep iff: parent is div.title AND text is exactly the decision title AND
-    href matches the decision pattern. This rejects language-selector
-    duplicates, accounts ('Meeting of ...'), and combined-statement PDFs.
+    Keep iff: parent is div.title AND the normalized title matches the
+    decision title case-insensitively AND the href matches the decision
+    pattern. This rejects language-selector duplicates, accounts ('Meeting
+    of ...'), and combined-statement PDFs. The case-insensitive compare
+    matters: the 2016-12-08 hold is titled "Monetary Policy Decisions"
+    (title case) — an exact match silently drops it from the corpus.
     """
-    parent = anchor.parent
-    if parent is None or parent.name != "div" or "title" not in (parent.get("class") or []):
-        return None
-    if anchor.get_text(strip=True) != DECISION_TITLE:
+    if not _in_title_div(anchor) or _normalized_title(anchor) != DECISION_TITLE.lower():
         return None
     href = anchor.get("href") or ""
     if not DECISION_HREF.match(href):
@@ -95,6 +109,71 @@ def _classify_anchor(anchor) -> DocumentRef | None:
         url=BASE_URL + href,
         doc_type="decision",
     )
+
+
+def enumerate_non_decisions(
+    *,
+    client: httpx.Client | None = None,
+    first_year: int = FIRST_YEAR,
+    last_year: int | None = None,
+) -> list[DocumentRef]:
+    """Trap set: mopo-index items that are NOT rate-decision releases.
+
+    Two doc types from the same yearly fragments: English non-decision press
+    releases under /press/pr/date/ (doc_type "non_decision" — programme
+    details like PEPP/TPI/TLTRO and remuneration changes; none announce
+    key-rate decisions, audited at ingest) and monetary-policy meeting
+    accounts (doc_type "minutes"). Items can be filed under a neighboring
+    fragment year, so refs are deduped by doc_id and dated by dt isoDate.
+    """
+    last_year = last_year or date.today().year
+    owns_client = client is None
+    client = client or default_client(browser_headers=True)
+    refs: dict[str, DocumentRef] = {}
+    try:
+        for year in range(first_year, last_year + 1):
+            url = FRAGMENT_URL_TEMPLATE.format(year=year)
+            response = get_with_retries(client, url)
+            soup = BeautifulSoup(response.content, "html.parser", from_encoding="utf-8")
+            found = 0
+            for anchor in soup.find_all("a"):
+                ref = _classify_trap_anchor(anchor)
+                if ref is not None and ref.doc_id not in refs:
+                    refs[ref.doc_id] = ref
+                    found += 1
+            logger.info("ECB %d: %d non-decision trap documents", year, found)
+    finally:
+        if owns_client:
+            client.close()
+    return sorted(refs.values(), key=lambda ref: (ref.announcement_date, ref.doc_id))
+
+
+def _classify_trap_anchor(anchor) -> DocumentRef | None:
+    if not _in_title_div(anchor) or _normalized_title(anchor) == DECISION_TITLE.lower():
+        return None
+    href = anchor.get("href") or ""
+    if NON_DECISION_HREF.match(href):
+        doc_type = "non_decision"
+    elif ACCOUNTS_HREF.match(href):
+        doc_type = "minutes"  # meeting accounts are the ECB's minutes
+    else:
+        return None
+    return DocumentRef(
+        bank="ECB",
+        doc_id=_doc_id(href),
+        announcement_date=_announcement_date(anchor, href),
+        url=BASE_URL + href,
+        doc_type=doc_type,
+    )
+
+
+def _in_title_div(anchor) -> bool:
+    parent = anchor.parent
+    return parent is not None and parent.name == "div" and "title" in (parent.get("class") or [])
+
+
+def _normalized_title(anchor) -> str:
+    return normalize_text(anchor.get_text(" ", strip=True)).lower()
 
 
 def _doc_id(href: str) -> str:
@@ -114,7 +193,7 @@ def _announcement_date(anchor, href: str) -> date:
 
 
 def _date_from_href(href: str) -> date:
-    digits = re.search(r"(?:ecb\.mp|pr)(\d{6})", href).group(1)
+    digits = re.search(r"(?:ecb\.(?:mp|mg|pr)|pr)(\d{6})", href).group(1)
     yy, month, day = int(digits[:2]), int(digits[2:4]), int(digits[4:6])
     year = 1900 + yy if yy >= 90 else 2000 + yy
     return date(year, month, day)

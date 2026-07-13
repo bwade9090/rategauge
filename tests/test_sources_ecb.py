@@ -28,6 +28,10 @@ FRAGMENT = """
 </dd>
 <dt isoDate="2005-08-04"><div class="date">4 August 2005</div></dt>
 <dd><div class="title"><a href="/press/pr/date/2005/html/pr050804_2.en.html"  >Monetary policy decisions</a></div></dd>
+<dt isoDate="2016-12-08"><div class="date">8 December 2016</div></dt>
+<dd><div class="title"><a href="/press/pr/date/2016/html/pr161208.en.html"  >Monetary Policy Decisions</a></div></dd>
+<dt isoDate="2020-03-18"><div class="date">18 March 2020</div></dt>
+<dd><div class="title"><a href="/press/pr/date/2020/html/ecb.pr200318_1~3949d6f266.en.html"  >ECB announces Pandemic Emergency Purchase Programme (PEPP)</a></div></dd>
 """
 
 MODERN_PAGE = """<html><body><nav><div class="section">CHROME JUNK</div></nav><main >
@@ -63,13 +67,21 @@ class TestEnumerate:
 
     def test_keeps_only_decision_releases(self):
         refs = self.enumerate()
-        assert [ref.doc_id for ref in refs] == ["ecb_pr050804_2", "ecb_mp260611"]
+        assert [ref.doc_id for ref in refs] == ["ecb_pr050804_2", "ecb_pr161208", "ecb_mp260611"]
+
+    def test_title_case_decision_recovered(self):
+        # Regression (found 2026-07-08): the 2016-12-08 hold is titled
+        # "Monetary Policy Decisions" — an exact-case match dropped it.
+        refs = {ref.doc_id: ref for ref in self.enumerate()}
+        assert refs["ecb_pr161208"].doc_type == "decision"
+        assert refs["ecb_pr161208"].announcement_date == date(2016, 12, 8)
 
     def test_rejects_accounts_pdfs_and_language_duplicates(self):
         urls = "".join(ref.url for ref in self.enumerate())
         assert "accounts" not in urls
         assert ".pdf" not in urls
         assert ".bg.html" not in urls
+        assert "pr200318_1" not in urls  # non-decision release is not a decision
 
     def test_dates_come_from_isodate_attribute(self):
         refs = {ref.doc_id: ref for ref in self.enumerate()}
@@ -79,6 +91,36 @@ class TestEnumerate:
     def test_urls_are_absolute(self):
         for ref in self.enumerate():
             assert ref.url.startswith("https://www.ecb.europa.eu/press/pr/date/")
+
+
+class TestEnumerateNonDecisions:
+    def enumerate(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "index_include.en.html" in str(request.url)
+            return httpx.Response(200, text=FRAGMENT)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        return ecb.enumerate_non_decisions(client=client, first_year=2026, last_year=2026)
+
+    def test_collects_accounts_and_non_decision_releases(self):
+        refs = {ref.doc_id: ref for ref in self.enumerate()}
+        assert set(refs) == {"ecb_mg260416", "ecb_pr200318_1"}
+        assert refs["ecb_mg260416"].doc_type == "minutes"  # meeting accounts
+        assert refs["ecb_mg260416"].announcement_date == date(2026, 4, 16)  # publication date
+        assert refs["ecb_pr200318_1"].doc_type == "non_decision"
+        assert refs["ecb_pr200318_1"].announcement_date == date(2020, 3, 18)
+
+    def test_decisions_never_leak_into_the_trap_set(self):
+        # Includes the title-case "Monetary Policy Decisions" (a REAL hold):
+        # it belongs to the decision corpus, not the trap set.
+        doc_ids = {ref.doc_id for ref in self.enumerate()}
+        assert "ecb_pr161208" not in doc_ids
+        assert "ecb_mp260611" not in doc_ids
+        assert "ecb_pr050804_2" not in doc_ids
+
+    def test_pdfs_rejected(self):
+        urls = "".join(ref.url for ref in self.enumerate())
+        assert ".pdf" not in urls
 
 
 class TestDateFromHref:
