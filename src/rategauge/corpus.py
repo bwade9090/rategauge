@@ -54,12 +54,15 @@ def load_documents(
     catalog_path: Path = CATALOG_PATH,
     traps_path: Path = TRAPS_CATALOG_PATH,
     cache_dir: Path = CACHE_DIR,
+    fetch_missing: bool = False,
 ) -> list[LoadedDocument]:
     """Load and text-extract the given documents; loud failure on gaps.
 
     Looks up doc_ids across the decision catalog and (when present) the trap
     catalog — the two are separate files so trap documents can never leak
     into event-ownership resolution or ``batch submit --all``.
+    ``fetch_missing`` fetches cache misses on demand from the official source
+    (the serving path: a fresh container starts with an empty cache).
     """
     catalog = {ref.doc_id: ref for ref in common.read_catalog(catalog_path)}
     if traps_path.exists():
@@ -71,6 +74,8 @@ def load_documents(
             raise KeyError(f"{doc_id} not in catalog — run `rategauge ingest` first")
         ref = catalog[doc_id]
         html = cache.get(ref)
+        if html is None and fetch_missing:
+            html = common.fetch_documents([ref], cache).get(ref.doc_id)
         if html is None:
             raise FileNotFoundError(f"{doc_id} not cached — run `rategauge ingest` first")
         documents.append(LoadedDocument(ref=ref, text=_extract(ref, html)))

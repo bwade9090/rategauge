@@ -14,6 +14,7 @@ keywords = ["llm", "evaluation", "central-banking", "monetary-policy", "sdmx", "
 dependencies = [
     "anthropic>=0.90",
     "beautifulsoup4>=4.12",
+    "fastapi>=0.115",
     "httpx>=0.27",
     "openai>=2.0",
     "pandas>=2.2",
@@ -21,6 +22,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
     "truststore>=0.9",
+    "uvicorn>=0.30",
 ]
 
 [project.urls]

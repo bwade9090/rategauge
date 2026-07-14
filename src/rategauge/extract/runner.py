@@ -8,6 +8,7 @@ scoring is replayable offline. A cost ledger row is appended per run.
 import csv
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -131,6 +132,12 @@ def _run_documents(documents, extract, client, model, model_key, prompt, prompt_
             raw = extract(client, model.model_id, prompt, document.as_model_input())
         except (openai.OpenAIError, anthropic.AnthropicError, EmptyResponseError) as error:
             row["error"] = f"api_error: {error}"
+            # Empty responses are still billed — keep the ledger honest.
+            row["input_tokens"] = getattr(error, "input_tokens", 0)
+            row["output_tokens"] = getattr(error, "output_tokens", 0)
+            row["cost_usd"] = round(
+                model.cost_usd(row["input_tokens"], row["output_tokens"]), 6
+            )
             logger.error("extraction failed for %s: %s", document.ref.doc_id, error)
             rows.append(row)
             continue
@@ -150,6 +157,20 @@ def _run_documents(documents, extract, client, model, model_key, prompt, prompt_
         )
 
 
+def replace_with_retries(tmp: Path, path: Path, *, attempts: int = 5) -> None:
+    """Atomic swap with brief retries: os.replace is atomic, but Windows
+    antivirus/indexers transiently lock the destination and throw
+    PermissionError — retry instead of crashing mid-write."""
+    for attempt in range(1, attempts + 1):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if attempt == attempts:
+                raise
+            time.sleep(0.1 * attempt)
+
+
 def write_artifact(rows: list[dict], model_key: str, prompt_version: str, out_dir: Path) -> None:
     """Merge rows into the run's artifact by doc_id — never truncate prior results."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -165,7 +186,7 @@ def write_artifact(rows: list[dict], model_key: str, prompt_version: str, out_di
     with tmp.open("w", encoding="utf-8") as handle:
         for row in merged.values():
             handle.write(json.dumps(row) + "\n")
-    tmp.replace(path)  # atomic swap: a crash mid-write can't truncate paid-for rows
+    replace_with_retries(tmp, path)  # atomic: a crash mid-write can't truncate paid rows
     logger.info("wrote %s (%d rows, %d updated)", path, len(merged), len(rows))
 
 

@@ -21,7 +21,16 @@ MAX_OUTPUT_TOKENS = 2048
 
 
 class EmptyResponseError(Exception):
-    """The provider returned a response with no usable text payload."""
+    """The provider returned a response with no usable text payload.
+
+    Carries the response usage: these calls ARE billed, and cost accounting
+    (ledger, traces) must not record paid tokens as zero.
+    """
+
+    def __init__(self, message: str, *, input_tokens: int = 0, output_tokens: int = 0):
+        super().__init__(message)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 @dataclass(frozen=True)
@@ -85,7 +94,11 @@ def extract_anthropic(
     if payload is None:
         # Legitimate SDK shape (e.g. refusal stop reason, max_tokens with no
         # output) — surface as a recordable per-document error, not a crash.
-        raise EmptyResponseError(f"no text block in response (stop_reason={response.stop_reason})")
+        raise EmptyResponseError(
+            f"no text block in response (stop_reason={response.stop_reason})",
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
     return RawExtraction(
         payload=payload,
         input_tokens=response.usage.input_tokens,

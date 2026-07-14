@@ -26,6 +26,7 @@ from rategauge.extract.runner import (
     apply_payload,
     load_prompt,
     new_row,
+    replace_with_retries,
     write_artifact,
 )
 from rategauge.schema import EXTRACTION_JSON_SCHEMA, SCHEMA_VERSION
@@ -413,7 +414,7 @@ def _save_state(state: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)  # atomic swap: a crash mid-write can't corrupt the state
+    replace_with_retries(tmp, path)  # atomic: a crash mid-write can't corrupt the state
 
 
 def _ledger_has_run(ledger_path: Path, run_id: str) -> bool:

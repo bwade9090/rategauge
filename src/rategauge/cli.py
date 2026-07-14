@@ -60,6 +60,10 @@ def main(argv: list[str] | None = None) -> None:
     grade.add_argument("--models", required=True, help="comma-separated model keys")
     grade.add_argument("--prompt", default="v001", help="prompt version")
 
+    serve = subparsers.add_parser("serve", help="run the FastAPI service")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -90,6 +94,8 @@ def main(argv: list[str] | None = None) -> None:
             run_batch_collect(args.batch_id)
     elif args.command == "grade":
         run_grade(args.models.split(","), args.prompt)
+    elif args.command == "serve":
+        run_serve(args.host, args.port)
 
 
 def run_golden(out_dir: Path) -> None:
@@ -312,6 +318,12 @@ def run_grade(model_keys: list[str], prompt_version: str) -> None:
                 f"only-a={test['only_a_correct']} only-b={test['only_b_correct']} "
                 f"p={test['p_value']} (n={test['n_paired']})"
             )
+
+
+def run_serve(host: str, port: int) -> None:
+    import uvicorn
+
+    uvicorn.run("rategauge.serve.api:app", host=host, port=port)
 
 
 if __name__ == "__main__":

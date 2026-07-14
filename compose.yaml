@@ -1,0 +1,21 @@
+services:
+  rategauge:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      RATEGAUGE_TRACES_DB: /app/var/traces.sqlite
+    # Provider keys for POST /extract; read endpoints work without them.
+    # The optional env_file long form needs Docker Compose >= 2.24
+    # (Docker Desktop 4.27+); on older Compose, create an empty .env instead.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persist the on-demand document cache and live-extraction traces.
+      - rategauge-cache:/app/data/cache
+      - rategauge-var:/app/var
+
+volumes:
+  rategauge-cache:
+  rategauge-var:

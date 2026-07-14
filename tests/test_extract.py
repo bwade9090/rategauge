@@ -99,6 +99,25 @@ class TestCorpus:
         doc = corpus.LoadedDocument(ref=ref, text="text")
         assert doc.as_model_input().startswith("Source: Federal Reserve (FOMC) publication")
 
+    def test_fetch_missing_fetches_cache_misses_on_demand(self, tmp_path, monkeypatch):
+        catalog, cache_dir = self.make_corpus(tmp_path)
+        ref = DocumentRef("ECB", "ecb_new", date(2026, 7, 1), "https://x/new", "decision")
+        common.write_catalog(
+            common.read_catalog(catalog) + [ref], catalog
+        )
+
+        def fake_fetch(refs, cache, **kwargs):
+            cache.put(refs[0], ECB_PAGE)
+            return {refs[0].doc_id: ECB_PAGE}
+
+        monkeypatch.setattr(corpus.common, "fetch_documents", fake_fetch)
+        [doc] = corpus.load_documents(
+            ["ecb_new"], catalog_path=catalog, cache_dir=cache_dir, fetch_missing=True
+        )
+        assert "raise the three key ECB interest rates" in doc.text
+        # And the fetch is cached for next time.
+        assert corpus.load_documents(["ecb_new"], catalog_path=catalog, cache_dir=cache_dir)
+
 
 class TestRunner:
     def run(self, tmp_path, monkeypatch, payloads, doc_ids=None):
@@ -172,6 +191,15 @@ class TestRunner:
         assert rows[1]["ok"] is True  # the run survived the failure
         assert len(self.artifact_rows(tmp_path)) == 2
 
+    def test_billed_empty_response_keeps_its_cost_in_the_ledger(self, tmp_path, monkeypatch):
+        from rategauge.extract.clients import EmptyResponseError
+
+        payloads = [EmptyResponseError("refusal", input_tokens=1000, output_tokens=50)]
+        [row] = self.run(tmp_path, monkeypatch, payloads)
+        assert row["ok"] is False
+        assert row["input_tokens"] == 1000
+        assert row["cost_usd"] > 0  # the provider billed these tokens
+
     def test_artifact_merges_by_doc_id_across_runs(self, tmp_path, monkeypatch):
         self.run(tmp_path, monkeypatch, [json.dumps(VALID_RECORD)] * 2, ("a", "b"))
         self.run(tmp_path, monkeypatch, [json.dumps(VALID_RECORD)], ("b",))
@@ -192,3 +220,39 @@ class TestRunner:
     def test_empty_doc_ids_rejected(self, tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="no doc_ids"):
             self.run(tmp_path, monkeypatch, [], doc_ids=())
+
+
+class TestAtomicReplace:
+    def test_retries_transient_windows_lock(self, tmp_path, monkeypatch):
+        # Antivirus/indexers transiently lock replace targets on Windows;
+        # the swap must retry instead of crashing mid-collect.
+        from pathlib import Path
+
+        calls = {"n": 0}
+        real_replace = Path.replace
+
+        def flaky_replace(self, target):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise PermissionError("locked by scanner")
+            return real_replace(self, target)
+
+        monkeypatch.setattr(Path, "replace", flaky_replace)
+        monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+        tmp = tmp_path / "a.tmp"
+        tmp.write_text("payload", encoding="utf-8")
+        runner.replace_with_retries(tmp, tmp_path / "a.json")
+        assert (tmp_path / "a.json").read_text(encoding="utf-8") == "payload"
+        assert calls["n"] == 3
+
+    def test_gives_up_after_max_attempts(self, tmp_path, monkeypatch):
+        from pathlib import Path
+
+        monkeypatch.setattr(
+            Path, "replace", lambda self, target: (_ for _ in ()).throw(PermissionError("locked"))
+        )
+        monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+        tmp = tmp_path / "a.tmp"
+        tmp.write_text("payload", encoding="utf-8")
+        with pytest.raises(PermissionError):
+            runner.replace_with_retries(tmp, tmp_path / "a.json", attempts=3)

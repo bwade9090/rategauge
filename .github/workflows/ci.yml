@@ -25,3 +25,21 @@ jobs:
         run: ruff check .
       - name: Test (network-free)
         run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t rategauge .
+      - name: Smoke-test the service
+        run: |
+          docker run -d --rm -p 8000:8000 --name rategauge rategauge
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8000/health; then ok=1; break; fi
+            sleep 1
+          done
+          test "$ok" = "1"
+          curl -fsS "http://127.0.0.1:8000/eval/scorecard" | grep -q claude-haiku-4-5
+          curl -fsS "http://127.0.0.1:8000/decisions?model=gpt-5.4-nano&bank=FED&limit=1" | grep -q fed_
+          docker stop rategauge

@@ -38,8 +38,9 @@ Core pipeline complete end to end: corpus → golden set → batch extraction �
 - [x] Model × prompt league table with Wilson 95% confidence intervals (results below)
 - [x] Trap-document set (64 no-decision documents: FOMC minutes, ECB meeting accounts, non-decision releases) for false-positive measurement ([trap catalog](data/catalog/traps.csv))
 - [x] Evaluation methodology write-up with case studies ([docs/eval-methodology.md](docs/eval-methodology.md))
-- [ ] FastAPI service + SQLite request tracing
-- [ ] Docker image & scheduled incremental ingestion
+- [x] FastAPI service + SQLite request tracing (usage below; smoke-tested in CI from the Docker image)
+- [x] Docker image (`docker compose up`)
+- [ ] Scheduled incremental ingestion of new decisions
 
 ## Results — full corpus + trap set, prompt v001 (July 2026)
 
@@ -82,6 +83,21 @@ python -m pip install --upgrade pip
 pip install -e . -r requirements-dev.txt
 pytest
 ```
+
+## Serving
+
+`rategauge serve` (or `docker compose up`) starts a FastAPI service over the committed evaluation artifacts — the same files every number above comes from, so the API can never disagree with the published results:
+
+```
+GET  /health
+GET  /decisions?model=claude-haiku-4-5&bank=ECB&date_from=2026-01-01&status=graded
+GET  /eval/scorecard?model=gpt-5.4-nano
+POST /extract        {"model": "gpt-5.4-nano", "doc_id": "ecb_pr121206"}
+                     {"model": "gpt-5.4-nano", "bank": "FED", "text": "..."}
+GET  /traces
+```
+
+`POST /extract` runs a live schema-constrained extraction (provider keys from `.env`; either a catalogued `doc_id` or raw `bank`+`text`) and traces tokens, computed USD cost, and latency to SQLite; `GET /traces` exposes the monitoring trail. Extraction failures are part of the measured domain, so they return `200` with `ok: false` — exactly like artifact rows. Interactive docs at `/docs` (OpenAPI).
 
 ## Data sources & licensing
 
